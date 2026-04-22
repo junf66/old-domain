@@ -5,6 +5,7 @@ Endpoint: http://web.archive.org/cdx/search/cdx
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +25,83 @@ USER_AGENT = (
 #     common japanese TLD/hosts. We can't fetch body cheaply, so we also
 #     infer from language hints that appear in some CDX rows.
 JAPANESE_URL_HINTS = (".jp/", ".jp?", ".jp#", ".co.jp", ".or.jp", ".ne.jp")
+
+# Unicode ranges used to detect Japanese text in HTML bodies.
+_JAPANESE_RANGES = (
+    (0x3040, 0x309F),  # Hiragana
+    (0x30A0, 0x30FF),  # Katakana
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0xFF66, 0xFF9F),  # Half-width Katakana
+)
+
+
+def _is_japanese_text(html: str, threshold: float = 0.05) -> bool:
+    """Return True if `html` looks like Japanese content.
+
+    Heuristics:
+      1. <html lang="ja...">
+      2. Ratio of Japanese chars / printable chars >= threshold
+    """
+    if not html:
+        return False
+    m = re.search(
+        r'<html[^>]*\blang\s*=\s*["\']([A-Za-z-]+)',
+        html[:4000],
+        re.I,
+    )
+    if m and m.group(1).lower().startswith("ja"):
+        return True
+    total = 0
+    jp = 0
+    for c in html:
+        cp = ord(c)
+        if cp < 0x21:  # whitespace / control
+            continue
+        total += 1
+        for lo, hi in _JAPANESE_RANGES:
+            if lo <= cp <= hi:
+                jp += 1
+                break
+    if total < 200:
+        return False
+    return (jp / total) >= threshold
+
+
+def fetch_snapshot_html(
+    domain: str, timestamp: str, timeout: int = 15, max_bytes: int = 200_000
+) -> str:
+    """Fetch a specific Wayback snapshot's raw HTML (no toolbar).
+
+    Uses the `id_` flag to get the unrewritten body. Capped at `max_bytes`.
+    """
+    url = f"http://web.archive.org/web/{timestamp}id_/http://{domain}/"
+    try:
+        resp = requests.get(
+            url,
+            timeout=timeout,
+            headers={"User-Agent": USER_AGENT},
+            stream=True,
+        )
+        if resp.status_code != 200:
+            return ""
+        content = resp.raw.read(max_bytes, decode_content=True)
+        enc = resp.encoding or resp.apparent_encoding or "utf-8"
+        return content.decode(enc, errors="replace")
+    except Exception:
+        return ""
+
+
+def _pick_latest_html(rows: list[dict]) -> dict | None:
+    """Return the snapshot row with the most recent text/html 200 response."""
+    cands = [
+        r for r in rows
+        if (r.get("mimetype") or "").lower().startswith("text/html")
+        and (r.get("statuscode") or "") == "200"
+    ]
+    if not cands:
+        return None
+    cands.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return cands[0]
 
 
 def _parse_ts(ts: str) -> datetime | None:
@@ -59,15 +137,17 @@ def fetch_cdx(domain: str, timeout: int = 30) -> list[dict[str, Any]]:
     return [dict(zip(header, row)) for row in rows]
 
 
-def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
+def summarize(
+    domain: str,
+    timeout: int = 30,
+    check_content: bool = True,
+) -> dict[str, Any]:
     """Return a summary of Wayback history for `domain`.
 
-    Keys:
-      first_snapshot (ISO date str or None)
-      last_snapshot  (ISO date str or None)
-      snapshot_count (int)
-      years_active   (float; years between first and last snapshot)
-      has_japanese   (bool; based on URL host hints)
+    Japanese detection:
+      1. URL heuristic — any snapshot whose host ends in `.jp` etc.
+      2. (if check_content) fetch the latest HTML snapshot and look for
+         `<html lang="ja">` or a ≥5 % Japanese-character ratio.
     """
     rows = fetch_cdx(domain, timeout=timeout)
     if not rows:
@@ -78,6 +158,7 @@ def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
             "snapshot_count": 0,
             "years_active": 0.0,
             "has_japanese": False,
+            "japanese_source": "none",
         }
 
     timestamps = [_parse_ts(r.get("timestamp", "")) for r in rows]
@@ -94,11 +175,19 @@ def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
         if any(hint in original for hint in JAPANESE_URL_HINTS):
             has_jp = True
             break
-        # `example.jp` with no trailing slash
         host = original.split("//", 1)[-1].split("/", 1)[0]
         if host.endswith(".jp"):
             has_jp = True
             break
+
+    japanese_source = "url" if has_jp else "none"
+    if not has_jp and check_content:
+        snap = _pick_latest_html(rows)
+        if snap:
+            html = fetch_snapshot_html(domain, snap.get("timestamp", ""))
+            if _is_japanese_text(html):
+                has_jp = True
+                japanese_source = "content"
 
     return {
         "first_snapshot": first.date().isoformat() if first else None,
@@ -107,6 +196,7 @@ def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
         "snapshot_count": len(rows),
         "years_active": years,
         "has_japanese": has_jp,
+        "japanese_source": japanese_source,
     }
 
 
