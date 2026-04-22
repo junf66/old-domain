@@ -9,8 +9,9 @@ __pycache__/
 .venv/
 venv/
 
-# CSV inputs (user-provided, not tracked)
-data/input/*.csv
+# CSV inputs: the sample is local-only, but real uploads are tracked
+# so GitHub Actions can pick them up.
+data/input/sample.csv
 
 # Processed outputs
 data/output/*

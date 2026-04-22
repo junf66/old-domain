@@ -37,7 +37,35 @@ old-domain/
 └── README.md
 ```
 
-## セットアップ
+## かんたん利用(ブラウザだけで完結・推奨)
+
+PCに何もインストールせず、ブラウザ操作だけで使えます。
+
+### 1回だけやる準備
+
+1. **APIキーを登録**
+   - GitHub のリポジトリで **Settings → Secrets and variables → Actions**
+   - **New repository secret** をクリック
+   - **Name**: `AHREFS_API_KEY` / **Value**: Ahrefs の API キーを貼る → **Add secret**
+2. **Pages を有効化**
+   - **Settings → Pages**
+   - **Source**: `Deploy from a branch`
+   - **Branch**: `main` / フォルダ `/docs` を選択 → **Save**
+   - 公開URLが表示される(例: `https://junf66.github.io/old-domain/`)
+
+### 毎回やる操作(これだけ)
+
+1. expireddomains.net から CSV をダウンロード
+2. GitHub のリポジトリ画面で `data/input/` を開く
+3. **Add file → Upload files** で CSV をドラッグ&ドロップ → **Commit changes**
+4. 数分待つと **Actions タブ**の実行が緑✅になり、ページが自動更新される
+5. Pages の URL を開いて結果を閲覧
+
+手動で再実行したい場合は **Actions タブ → Analyze domains → Run workflow** ボタン。
+
+---
+
+## PCで実行したい場合のセットアップ
 
 ```bash
 # 1. 依存関係インストール
