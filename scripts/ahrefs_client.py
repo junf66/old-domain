@@ -70,7 +70,10 @@ class AhrefsClient:
             chunk = domains[i : i + 100]
             body = {
                 "select": select,
-                "targets": [{"url": d, "mode": "domain"} for d in chunk],
+                "targets": [
+                    {"url": d, "protocol": "both", "mode": "domain"}
+                    for d in chunk
+                ],
             }
             data = self._post("batch-analysis/batch-analysis", body=body)
             rows = data.get("targets") or data.get("results") or []
