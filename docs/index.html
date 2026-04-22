@@ -738,30 +738,33 @@
       categoryFilter.addEventListener("change", apply);
 
       // ---- Favorite toggle ----
-      document.querySelector("#domains tbody").addEventListener(
-        "click", function (e) {
-          var btn = e.target.closest(".fav-btn");
-          if (!btn) return;
-          var d = btn.getAttribute("data-domain");
-          if (!d) return;
-          if (favs.has(d)) {
-            favs.delete(d);
-            btn.classList.remove("on");
-          } else {
-            favs.add(d);
-            btn.classList.add("on");
-          }
-          saveFavs(favs);
-          // Update the underlying cell value so sorting/filtering picks it up.
-          var row = table.row($(btn).closest("tr"));
-          var d2 = row.data();
-          if (d2 && d2[0]) {
-            d2[0].value = favs.has(d) ? 1 : 0;
-            row.data(d2).draw(false);
-          }
-          if (favOnly.checked) apply();
+      document.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest(".fav-btn");
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var d = btn.getAttribute("data-domain");
+        if (!d) return;
+        if (favs.has(d)) {
+          favs.delete(d);
+          btn.classList.remove("on");
+        } else {
+          favs.add(d);
+          btn.classList.add("on");
         }
-      );
+        saveFavs(favs);
+        var row = table.row($(btn).closest("tr"));
+        var d2 = row.data();
+        if (d2 && d2[0]) {
+          d2[0].value = favs.has(d) ? 1 : 0;
+          d2[0].display = d2[0].display.replace(
+            /class="fav-btn( on)?"/,
+            'class="fav-btn' + (favs.has(d) ? " on" : "") + '"'
+          );
+          row.data(d2);
+        }
+        if (favOnly.checked) apply();
+      });
 
       apply();
 
@@ -782,19 +785,17 @@
       document.addEventListener("keydown", function (e) {
         if (e.key === "Escape" && !previewModal.hidden) closePreview();
       });
-      document.querySelector("#domains tbody").addEventListener(
-        "click", function (e) {
-          var btn = e.target.closest(".preview-btn");
-          if (!btn) return;
-          var domain = btn.getAttribute("data-domain");
-          var ts = btn.getAttribute("data-ts") || "";
-          var url = waybackPreviewUrl(domain, ts);
-          previewTitle.textContent = domain;
-          previewOpen.href = url;
-          previewFrame.src = url;
-          previewModal.hidden = false;
-        }
-      );
+      document.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest(".preview-btn");
+        if (!btn) return;
+        var domain = btn.getAttribute("data-domain");
+        var ts = btn.getAttribute("data-ts") || "";
+        var url = waybackPreviewUrl(domain, ts);
+        previewTitle.textContent = domain;
+        previewOpen.href = url;
+        previewFrame.src = url;
+        previewModal.hidden = false;
+      });
     }
 
     load();
