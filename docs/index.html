@@ -496,6 +496,31 @@
       })();
 
       var PAT_KEY = "olddomain.github.pat";
+
+      // Pre-shared password (SHA-256 hash baked into the page so the
+      // plaintext is never exposed). Anyone who can read this file can
+      // see the hash, but reversing it requires guessing the password.
+      var AUTH_HASH =
+        "c3d5748b8d7f1e5a1e4f0d19c7fc3660de9b33406998982f00036f877351f00d";
+
+      async function sha256Hex(s) {
+        var enc = new TextEncoder().encode(s);
+        var buf = await crypto.subtle.digest("SHA-256", enc);
+        return Array.from(new Uint8Array(buf))
+          .map(function (b) { return b.toString(16).padStart(2, "0"); })
+          .join("");
+      }
+
+      async function passwordOk() {
+        var input = prompt("アップロード用パスワードを入力してください");
+        if (!input) return false;
+        var hash = await sha256Hex(input);
+        if (hash !== AUTH_HASH) {
+          alert("パスワードが違います。");
+          return false;
+        }
+        return true;
+      }
       var dz = document.getElementById("dropzone");
       var fi = document.getElementById("fileInput");
       var pickBtn = document.getElementById("pickBtn");
@@ -552,6 +577,11 @@
         }
         if (file.size > 5 * 1024 * 1024) {
           showStatus("ファイルが大きすぎます(5MB 上限)。", "error");
+          return;
+        }
+        var ok = await passwordOk();
+        if (!ok) {
+          showStatus("認証に失敗したためアップロードを中止しました。", "error");
           return;
         }
         var pat = getPat();
