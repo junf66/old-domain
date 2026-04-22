@@ -320,8 +320,16 @@
       return "score-low";
     }
 
-    function waybackUrl(d) {
+    function waybackCalendarUrl(d) {
+      // Calendar / full snapshot history
       return "https://web.archive.org/web/*/" + encodeURIComponent(d);
+    }
+    function waybackLatestUrl(d) {
+      // Redirects to the most recent archived page
+      return "https://web.archive.org/web/2/" + encodeURIComponent(d);
+    }
+    function liveUrl(d) {
+      return "http://" + d;
     }
     function ahrefsUrl(d) {
       return "https://app.ahrefs.com/site-explorer/overview/v2/subdomains/recent?target="
@@ -350,22 +358,36 @@
             ? '<span class="spam-yes">⚠ ' +
               escapeHtml((r.spam_hits || []).join(", ")) + "</span>"
             : "—";
+          const domainCell =
+            '<a href="' + waybackCalendarUrl(r.domain) +
+            '" target="_blank" rel="noopener" title="Waybackで履歴を見る">' +
+            escapeHtml(r.domain) + "</a>";
+          const waybackCell =
+            '<a href="' + waybackCalendarUrl(r.domain) +
+            '" target="_blank" rel="noopener" title="スナップショット一覧">📅 履歴</a>' +
+            ' <a href="' + waybackLatestUrl(r.domain) +
+            '" target="_blank" rel="noopener" title="最新アーカイブ">🕘 最新</a>';
           return [
-            escapeHtml(r.domain),
+            { display: domainCell, value: r.domain },
             r.score,
             r.dr,
             r.refdomains,
             r.years_active,
             r.has_japanese ? "あり" : "—",
             { display: spamCell, value: r.has_spam ? 1 : 0 },
-            '<a href="' + waybackUrl(r.domain) +
-              '" target="_blank" rel="noopener">Wayback</a>',
+            waybackCell,
             '<a href="' + ahrefsUrl(r.domain) +
               '" target="_blank" rel="noopener">Ahrefs</a>',
           ];
         }),
         columns: [
-          { title: "ドメイン" },
+          {
+            title: "ドメイン",
+            render: function (data, type) {
+              if (type === "display") return data.display;
+              return data.value;
+            },
+          },
           {
             title: "スコア",
             className: "score-cell",
