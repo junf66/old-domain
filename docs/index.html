@@ -384,6 +384,10 @@
 
     <div class="filters" id="filters">
       <div class="filter">
+        <label><span>ジャンル</span></label>
+        <select id="categoryFilter"><option value="">全て</option></select>
+      </div>
+      <div class="filter">
         <label><span>スコア 下限</span><span id="scoreValue">0</span></label>
         <input type="range" id="scoreMin" min="0" max="100" value="0" step="1">
       </div>
@@ -410,10 +414,6 @@
       <div class="filter">
         <label><span>運用年数下限</span><span id="yearsValue">0</span></label>
         <input type="range" id="yearsMin" min="0" max="30" value="0" step="1">
-      </div>
-      <div class="filter">
-        <label><span>ジャンル</span></label>
-        <select id="categoryFilter"><option value="">全て</option></select>
       </div>
       <div class="filter checkbox">
         <input type="checkbox" id="jpOnly">
