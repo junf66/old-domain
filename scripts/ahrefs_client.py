@@ -38,6 +38,15 @@ class AhrefsClient:
             )
         return resp.json()
 
+    def _post(self, path: str, body: dict) -> dict:
+        url = f"{API_BASE}/{path.lstrip('/')}"
+        resp = self.session.post(url, json=body, timeout=self.timeout)
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"Ahrefs API error {resp.status_code} on {path}: {resp.text[:400]}"
+            )
+        return resp.json()
+
     def subscription_info(self) -> dict:
         """Return remaining credits / limits for the account."""
         return self._get("subscription-info/limits-and-usage", params={})
@@ -50,23 +59,22 @@ class AhrefsClient:
         """
         domains = [d.strip() for d in domains if d and d.strip()]
         results: list[dict] = []
+        select = ",".join(
+            [
+                "url",
+                "domain_rating",
+                "refdomains",
+                "org_keywords",
+                "org_traffic",
+            ]
+        )
         for i in range(0, len(domains), 100):
             chunk = domains[i : i + 100]
-            targets = [{"url": d, "mode": "domain"} for d in chunk]
-            select = ",".join(
-                [
-                    "url",
-                    "domain_rating",
-                    "refdomains",
-                    "org_keywords",
-                    "org_traffic",
-                ]
-            )
-            params = {
+            body = {
                 "select": select,
-                "targets": __import__("json").dumps(targets),
+                "targets": [{"url": d, "mode": "domain"} for d in chunk],
             }
-            data = self._get("batch-analysis/batch-analysis", params=params)
+            data = self._post("batch-analysis/batch-analysis", body=body)
             rows = data.get("targets") or data.get("results") or []
             for row in rows:
                 results.append(row)
