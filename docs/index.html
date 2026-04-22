@@ -234,6 +234,59 @@
       margin-left: 4px;
     }
     .preview-btn:hover { background: #f2f7ff; }
+
+    /* Column-header tooltip "?" */
+    .tip {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #c6cdd8;
+      color: white;
+      font-size: 10px;
+      text-align: center;
+      line-height: 14px;
+      font-weight: bold;
+      margin-left: 4px;
+      cursor: help;
+      position: relative;
+      user-select: none;
+      vertical-align: middle;
+    }
+    .tip:hover { background: #1a66d0; }
+    .tip:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2b2b33;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 5px;
+      white-space: pre-line;
+      font-size: 12px;
+      font-weight: normal;
+      line-height: 1.5;
+      text-align: left;
+      z-index: 2000;
+      min-width: 220px;
+      max-width: 340px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+    .tip:hover::before {
+      content: "";
+      position: absolute;
+      bottom: calc(100% + 1px);
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #2b2b33;
+      z-index: 2000;
+      pointer-events: none;
+    }
+    /* Keep sort icon and tooltip from overlapping */
+    table.dataTable thead th .tip { cursor: help; }
   </style>
 </head>
 <body>
@@ -471,7 +524,7 @@
             r.refips || 0,
             r.refclass_c || 0,
             { display: jpDomainsCell, value: jpDomainsValue },
-            r.years_active,
+            Math.floor(r.years_active || 0),
             r.has_japanese ? "あり" : "—",
             { display: spamCell, value: r.has_spam ? 1 : 0 },
             waybackCell,
@@ -481,34 +534,34 @@
         }),
         columns: [
           {
-            title: "ドメイン",
+            title: 'ドメイン<span class="tip" data-tip="対象ドメイン名。クリックで Wayback Machine の履歴ページが開きます。">?</span>',
             render: function (data, type) {
               if (type === "display") return data.display;
               return data.value;
             },
           },
           {
-            title: "スコア",
+            title: 'スコア<span class="tip" data-tip="100点満点の総合スコア。DR×0.4 + log10(参照ドメイン+1)×7(最大20) + 運用年数×2(最大15) + 日本語履歴15 − スパム50。80+緑 / 60-80黄 / <60灰。">?</span>',
             className: "score-cell",
             createdCell: function (td, cellData) {
               $(td).closest("tr").addClass(rowClass(cellData));
             },
           },
-          { title: "DR" },
-          { title: "参照ドメイン" },
-          { title: "参照IP" },
-          { title: "Cクラス" },
+          { title: 'DR<span class="tip" data-tip="Ahrefs Domain Rating(0〜100)。被リンクの量と質に基づくドメイン権威性指標。高いほど強い。">?</span>' },
+          { title: '参照ドメイン<span class="tip" data-tip="リンクしている独自ドメインの数。多いほど被リンクが分散している。">?</span>' },
+          { title: '参照IP<span class="tip" data-tip="リンク元サーバのユニークIPアドレス数。">?</span>' },
+          { title: 'Cクラス<span class="tip" data-tip="リンク元IPの/24サブネット数(IPの最初の3オクテット)。参照IPより少なくなる=同じサーバ群に寄っている。極端に少ない場合PBN(リンク自作自演)の疑い。">?</span>' },
           {
-            title: "go/lg/ac.jp",
+            title: 'go/lg/ac.jp<span class="tip" data-tip="日本の公的(.go.jp)/自治体(.lg.jp)/学術(.ac.jp)ドメインからの参照ドメイン数。権威性の高い日本サイトからのリンク有無を確認。">?</span>',
             render: function (data, type) {
               if (type === "display") return data.display;
               return data.value;
             },
           },
-          { title: "運用年数" },
-          { title: "日本語履歴" },
+          { title: '運用年数<span class="tip" data-tip="Waybackの最古スナップから最新スナップまでの年数。過去に長く運用されていた証拠。">?</span>' },
+          { title: '日本語履歴<span class="tip" data-tip="Waybackの履歴から日本語運用の痕跡を検出。.jp系URLの履歴 OR ページのlang=ja / 日本語文字率5%以上を検出すると「あり」。">?</span>' },
           {
-            title: "スパム",
+            title: 'スパム<span class="tip" data-tip="上位アンカーテキストに casino/porn/viagra/カジノ/アダルト/出会い/副業 等のスパムKWが含まれていれば検出。検出時はスコアから-50点。">?</span>',
             render: function (data, type) {
               if (type === "display") return data.display;
               return data.value;
@@ -518,8 +571,14 @@
               if (cellData && cellData.value) $(td).addClass("spam-yes");
             },
           },
-          { title: "Wayback", orderable: false },
-          { title: "Ahrefs", orderable: false },
+          {
+            title: 'Wayback<span class="tip" data-tip="📅履歴=全スナップ一覧 / 🕘最新=最新アーカイブへジャンプ / 🖼プレビュー=このページ内で最新版を表示。">?</span>',
+            orderable: false,
+          },
+          {
+            title: 'Ahrefs<span class="tip" data-tip="Ahrefs の被リンク詳細ビュー(one-per-domain、DR降順)を新規タブで開きます。">?</span>',
+            orderable: false,
+          },
         ],
         order: [[1, "desc"]],
         pageLength: 50,
