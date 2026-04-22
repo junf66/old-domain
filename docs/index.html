@@ -97,20 +97,163 @@
       border-radius: 3px;
       font-size: 12px;
     }
+
+    /* Uploader */
+    #uploader { margin-bottom: 16px; }
+    .dz {
+      background: var(--panel);
+      border: 2px dashed #c5c7cf;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      transition: all .15s ease;
+      cursor: pointer;
+    }
+    .dz:hover { border-color: #1a66d0; background: #f2f7ff; }
+    .dz.dragover {
+      border-color: #1a66d0;
+      background: #e6efff;
+      transform: scale(1.01);
+    }
+    .dz-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .dz-sub   { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .dz-hint  { font-size: 12px; color: var(--muted); }
+    .dz button {
+      background: #1a66d0;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .dz button:hover { background: #155cbf; }
+    .link-btn {
+      background: transparent !important;
+      color: #1a66d0 !important;
+      text-decoration: underline;
+      padding: 0 !important;
+      font-size: 12px !important;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .status.info    { background: #eef4ff; color: #0e3a7a; }
+    .status.success { background: #e3f7e5; color: #1e5c2b; }
+    .status.error   { background: #fde2e2; color: #8a1a1a; }
+
+    /* Modal */
+    .modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-inner {
+      background: white;
+      max-width: 560px;
+      width: calc(100% - 32px);
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+      border-radius: 8px;
+      padding: 20px 24px;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.25);
+    }
+    .modal-inner h3 { margin: 0 0 12px 0; }
+    .modal-inner ol { padding-left: 20px; line-height: 1.7; font-size: 13px; }
+    .modal-inner input[type=password] {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .modal-buttons {
+      display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end;
+    }
+    .modal-buttons button {
+      padding: 6px 14px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .modal-buttons .primary {
+      background: #1a66d0; color: white; border-color: #1a66d0;
+    }
+    .modal-buttons .primary:hover { background: #155cbf; }
+    .modal-buttons .secondary { color: #a71d1d; }
+    .modal-note {
+      font-size: 11px; color: var(--muted); margin: 12px 0 0 0;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>中古ドメイン発掘ツール</h1>
     <p>
-      expireddomains.net の CSV を
-      <code>data/input/</code> に置き、
-      <code>python scripts/analyze.py</code> を実行すると
-      <code>docs/data.json</code> が更新され、このページに反映されます。
+      expireddomains.net の CSV をアップロードすると、自動で解析してこのページに反映されます。
     </p>
   </header>
 
   <main>
+    <section id="uploader">
+      <div id="dropzone" class="dz">
+        <input type="file" id="fileInput" accept=".csv" hidden>
+        <div class="dz-inner">
+          <div class="dz-title">📤 CSVをドラッグ&ドロップ</div>
+          <div class="dz-sub">または <button type="button" id="pickBtn">ファイルを選択</button></div>
+          <div class="dz-hint">
+            初回のみ GitHub のアクセストークン設定が必要です
+            <button type="button" id="settingsBtn" class="link-btn">⚙ 設定</button>
+          </div>
+        </div>
+      </div>
+      <div id="uploadStatus" class="status" hidden></div>
+    </section>
+
+    <!-- PAT setup modal -->
+    <div id="patModal" class="modal" hidden>
+      <div class="modal-inner">
+        <h3>GitHub アクセストークンの設定(初回のみ)</h3>
+        <ol>
+          <li>
+            <a href="https://github.com/settings/personal-access-tokens/new"
+               target="_blank" rel="noopener">GitHub のトークン作成ページ ↗</a>
+            を開く
+          </li>
+          <li>Token name: 任意(例:「old-domain uploader」)</li>
+          <li>Expiration: 好みで(90日推奨)</li>
+          <li>
+            <strong>Repository access</strong> →
+            <code>Only select repositories</code> →
+            <code>junf66/old-domain</code> を選択
+          </li>
+          <li>
+            <strong>Repository permissions</strong> →
+            <code>Contents</code> を <code>Read and write</code> に設定
+          </li>
+          <li>下部の <code>Generate token</code> → 表示されたトークンをコピー</li>
+          <li>そのトークンを下に貼り付け → 保存</li>
+        </ol>
+        <input type="password" id="patInput" placeholder="github_pat_..." spellcheck="false">
+        <div class="modal-buttons">
+          <button type="button" id="patCancel">キャンセル</button>
+          <button type="button" id="patClear" class="secondary">トークンを削除</button>
+          <button type="button" id="patSave" class="primary">保存</button>
+        </div>
+        <p class="modal-note">
+          トークンはこのブラウザの localStorage にのみ保存されます(サーバには送信されません)。
+        </p>
+      </div>
+    </div>
+
     <div class="filters" id="filters">
       <div class="filter">
         <label>
@@ -310,6 +453,191 @@
     }
 
     load();
+
+    // ============================================================
+    //  CSV Uploader: writes to data/input/ via GitHub Contents API
+    // ============================================================
+    (function () {
+      // Auto-detect "user/repo" from the Pages URL.
+      // e.g. junf66.github.io/old-domain/ -> junf66/old-domain
+      var repo = (function () {
+        var host = location.host;
+        var parts = location.pathname.split("/").filter(Boolean);
+        if (host.endsWith(".github.io") && parts.length > 0) {
+          return host.split(".")[0] + "/" + parts[0];
+        }
+        return "junf66/old-domain"; // fallback for local preview
+      })();
+
+      var PAT_KEY = "olddomain.github.pat";
+      var dz = document.getElementById("dropzone");
+      var fi = document.getElementById("fileInput");
+      var pickBtn = document.getElementById("pickBtn");
+      var statusEl = document.getElementById("uploadStatus");
+      var modal = document.getElementById("patModal");
+      var patInput = document.getElementById("patInput");
+      var patSave = document.getElementById("patSave");
+      var patCancel = document.getElementById("patCancel");
+      var patClear = document.getElementById("patClear");
+      var settingsBtn = document.getElementById("settingsBtn");
+
+      var pendingFile = null; // file waiting for PAT
+
+      function showStatus(msg, kind) {
+        statusEl.hidden = false;
+        statusEl.className = "status " + (kind || "info");
+        statusEl.innerHTML = msg;
+      }
+      function clearStatus() { statusEl.hidden = true; statusEl.innerHTML = ""; }
+
+      function openModal() { modal.hidden = false; patInput.focus(); }
+      function closeModal() { modal.hidden = true; patInput.value = ""; }
+
+      function getPat() { return localStorage.getItem(PAT_KEY) || ""; }
+      function setPat(v) { localStorage.setItem(PAT_KEY, v); }
+      function removePat() { localStorage.removeItem(PAT_KEY); }
+
+      function tsSlug() {
+        var d = new Date();
+        function p(n) { return String(n).padStart(2, "0"); }
+        return d.getUTCFullYear() + p(d.getUTCMonth()+1) + p(d.getUTCDate())
+          + "-" + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds());
+      }
+
+      function fileToBase64(file) {
+        return new Promise(function (resolve, reject) {
+          var r = new FileReader();
+          r.onload = function () {
+            // data:*/*;base64,XXXX -> XXXX
+            var s = String(r.result || "");
+            var i = s.indexOf(",");
+            resolve(i >= 0 ? s.slice(i + 1) : "");
+          };
+          r.onerror = function () { reject(r.error); };
+          r.readAsDataURL(file);
+        });
+      }
+
+      async function uploadFile(file) {
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".csv")) {
+          showStatus("CSVファイル(.csv)を指定してください。", "error");
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          showStatus("ファイルが大きすぎます(5MB 上限)。", "error");
+          return;
+        }
+        var pat = getPat();
+        if (!pat) {
+          pendingFile = file;
+          showStatus("初回のみ GitHub アクセストークンの設定が必要です。", "info");
+          openModal();
+          return;
+        }
+
+        showStatus("アップロード中... (" + file.name + ")", "info");
+        try {
+          var b64 = await fileToBase64(file);
+          var safeName = file.name.replace(/[^A-Za-z0-9._-]/g, "_");
+          var target = "upload-" + tsSlug() + "-" + safeName;
+          var url = "https://api.github.com/repos/" + repo
+            + "/contents/data/input/" + encodeURIComponent(target);
+          var res = await fetch(url, {
+            method: "PUT",
+            headers: {
+              "Authorization": "Bearer " + pat,
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+            body: JSON.stringify({
+              message: "upload CSV via dashboard: " + target,
+              content: b64,
+            }),
+          });
+          if (!res.ok) {
+            var body = await res.text();
+            if (res.status === 401 || res.status === 403) {
+              showStatus(
+                "認証エラー(" + res.status + ")。トークンが無効か権限不足です。" +
+                " <button class='link-btn' onclick='document.getElementById(\"settingsBtn\").click()'>設定を開く</button>",
+                "error"
+              );
+              return;
+            }
+            showStatus("アップロード失敗 (" + res.status + "): "
+              + body.slice(0, 200), "error");
+            return;
+          }
+          var data = await res.json();
+          var actionsUrl = "https://github.com/" + repo + "/actions";
+          showStatus(
+            "✅ アップロード成功: <code>" + target + "</code><br>"
+            + "処理が始まりました。15〜30分後にこのページを再読み込みしてください。 "
+            + "<a href='" + actionsUrl + "' target='_blank' rel='noopener'>進捗を見る ↗</a>",
+            "success"
+          );
+        } catch (e) {
+          showStatus("エラー: " + (e.message || e), "error");
+        }
+      }
+
+      // Drag & drop
+      ["dragenter", "dragover"].forEach(function (ev) {
+        dz.addEventListener(ev, function (e) {
+          e.preventDefault(); e.stopPropagation();
+          dz.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach(function (ev) {
+        dz.addEventListener(ev, function (e) {
+          e.preventDefault(); e.stopPropagation();
+          dz.classList.remove("dragover");
+        });
+      });
+      dz.addEventListener("drop", function (e) {
+        var f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) uploadFile(f);
+      });
+      dz.addEventListener("click", function (e) {
+        if (e.target.closest("button")) return;
+        fi.click();
+      });
+      pickBtn.addEventListener("click", function () { fi.click(); });
+      fi.addEventListener("change", function () {
+        if (fi.files && fi.files[0]) uploadFile(fi.files[0]);
+      });
+
+      // PAT modal
+      settingsBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        patInput.value = getPat();
+        openModal();
+      });
+      patCancel.addEventListener("click", function () {
+        pendingFile = null;
+        clearStatus();
+        closeModal();
+      });
+      patClear.addEventListener("click", function () {
+        removePat();
+        patInput.value = "";
+        showStatus("トークンを削除しました。", "info");
+        closeModal();
+      });
+      patSave.addEventListener("click", function () {
+        var v = patInput.value.trim();
+        if (!v) { showStatus("トークンが空です。", "error"); return; }
+        setPat(v);
+        closeModal();
+        if (pendingFile) {
+          var f = pendingFile; pendingFile = null;
+          uploadFile(f);
+        } else {
+          showStatus("トークンを保存しました。", "success");
+        }
+      });
+    })();
   </script>
 </body>
 </html>
