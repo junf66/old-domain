@@ -192,7 +192,6 @@ def analyze(
             refdomains = 123
             org_kw = 50
             org_tr = 100
-            ahrefs_rank = 123456
             refips = 110
             refclass_c = 80
             refdomains_gojp = 0
@@ -213,7 +212,6 @@ def analyze(
             refdomains = int(_f(row, "refdomains"))
             org_kw = int(_f(row, "org_keywords"))
             org_tr = int(_f(row, "org_traffic"))
-            ahrefs_rank = int(_f(row, "ahrefs_rank"))
             refips = int(_f(row, "refips"))
             refclass_c = int(_f(row, "refclass_c"))
             try:
@@ -259,7 +257,6 @@ def analyze(
                 "refdomains": refdomains,
                 "org_keywords": org_kw,
                 "org_traffic": org_tr,
-                "ahrefs_rank": ahrefs_rank,
                 "refips": refips,
                 "refclass_c": refclass_c,
                 "refdomains_gojp": refdomains_gojp,

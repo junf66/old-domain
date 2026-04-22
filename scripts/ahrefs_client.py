@@ -65,7 +65,6 @@ class AhrefsClient:
             "refdomains",
             "org_keywords",
             "org_traffic",
-            "ahrefs_rank",
             "refips",
             "refclass_c",
         ]
