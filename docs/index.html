@@ -41,6 +41,17 @@
     }
     header h1 { margin: 0; font-size: 18px; }
     header p { margin: 4px 0 0 0; color: var(--muted); font-size: 12px; }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .top-text { flex: 0 0 auto; }
+    .top-bar #uploader { flex: 1 1 420px; margin: 0; min-width: 320px; }
+    .top-bar .dz { padding: 12px 16px; }
+    .top-bar .dz-title { font-size: 14px; margin-bottom: 2px; }
+    .top-bar .dz-sub { margin-bottom: 0; }
     main { padding: 16px 24px; }
     .filters {
       background: var(--panel);
@@ -303,14 +314,11 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>中古ドメイン精査ツール</h1>
-    <p>
-      expireddomains.net CSVアップロードで自動解析
-    </p>
-  </header>
-
-  <main>
+  <header class="top-bar">
+    <div class="top-text">
+      <h1>中古ドメイン精査ツール</h1>
+      <p>expireddomains.net CSVアップロードで自動解析</p>
+    </div>
     <section id="uploader">
       <div id="dropzone" class="dz">
         <input type="file" id="fileInput" accept=".csv" hidden>
@@ -321,6 +329,9 @@
       </div>
       <div id="uploadStatus" class="status" hidden></div>
     </section>
+  </header>
+
+  <main>
 
     <!-- Wayback preview modal -->
     <div id="previewModal" class="modal" hidden>
