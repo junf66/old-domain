@@ -1,4 +1,4 @@
-# 中古ドメイン発掘ツール
+# 中古ドメイン精査ツール
 
 expireddomains.net の CSV を入力に、Ahrefs API と Wayback Machine API でドメインを評価し、
 GitHub Pages で一覧・ソート・絞り込みできる静的ダッシュボードを出力するツールです。
