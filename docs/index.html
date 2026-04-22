@@ -213,10 +213,6 @@
         <div class="dz-inner">
           <div class="dz-title">📤 CSVをドラッグ&ドロップ</div>
           <div class="dz-sub">または <button type="button" id="pickBtn">ファイルを選択</button></div>
-          <div class="dz-hint">
-            初回のみ GitHub のアクセストークン設定が必要です
-            <button type="button" id="settingsBtn" class="link-btn">⚙ 設定</button>
-          </div>
         </div>
       </div>
       <div id="uploadStatus" class="status" hidden></div>
@@ -530,7 +526,7 @@
       var patSave = document.getElementById("patSave");
       var patCancel = document.getElementById("patCancel");
       var patClear = document.getElementById("patClear");
-      var settingsBtn = document.getElementById("settingsBtn");
+      var settingsBtn = document.getElementById("settingsBtn"); // optional
 
       var pendingFile = null; // file waiting for PAT
 
@@ -614,9 +610,10 @@
           if (!res.ok) {
             var body = await res.text();
             if (res.status === 401 || res.status === 403) {
+              removePat();
               showStatus(
                 "認証エラー(" + res.status + ")。トークンが無効か権限不足です。" +
-                " <button class='link-btn' onclick='document.getElementById(\"settingsBtn\").click()'>設定を開く</button>",
+                "もう一度ファイルをドロップするとトークン入力画面が開きます。",
                 "error"
               );
               return;
@@ -664,12 +661,14 @@
         if (fi.files && fi.files[0]) uploadFile(fi.files[0]);
       });
 
-      // PAT modal
-      settingsBtn.addEventListener("click", function (e) {
-        e.stopPropagation();
-        patInput.value = getPat();
-        openModal();
-      });
+      // PAT modal — optional manual opener (only if the button exists)
+      if (settingsBtn) {
+        settingsBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          patInput.value = getPat();
+          openModal();
+        });
+      }
       patCancel.addEventListener("click", function () {
         pendingFile = null;
         clearStatus();
