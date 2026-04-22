@@ -35,6 +35,26 @@ _JAPANESE_RANGES = (
 )
 
 
+def extract_text(html: str, max_chars: int = 5000) -> tuple[str, str]:
+    """Return (title, text) extracted from `html`.
+
+    Used by the categoriser in analyze.py; keeps title separate so we
+    can weight it higher than body text.
+    """
+    if not html:
+        return "", ""
+    title_m = re.search(
+        r"<title[^>]*>([^<]{1,400})</title>", html, re.I | re.S
+    )
+    title = (title_m.group(1) if title_m else "").strip()
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.S | re.I)
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.S | re.I)
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return title, text[:max_chars]
+
+
 def _is_japanese_text(html: str, threshold: float = 0.05) -> bool:
     """Return True if `html` looks like Japanese content.
 
@@ -159,6 +179,8 @@ def summarize(
             "years_active": 0.0,
             "has_japanese": False,
             "japanese_source": "none",
+            "title": "",
+            "text_sample": "",
         }
 
     timestamps = [_parse_ts(r.get("timestamp", "")) for r in rows]
@@ -181,13 +203,17 @@ def summarize(
             break
 
     japanese_source = "url" if has_jp else "none"
-    if not has_jp and check_content:
+    title = ""
+    text_sample = ""
+    if check_content:
         snap = _pick_latest_html(rows)
         if snap:
             html = fetch_snapshot_html(domain, snap.get("timestamp", ""))
-            if _is_japanese_text(html):
-                has_jp = True
-                japanese_source = "content"
+            if html:
+                title, text_sample = extract_text(html)
+                if not has_jp and _is_japanese_text(html):
+                    has_jp = True
+                    japanese_source = "content"
 
     return {
         "first_snapshot": first.date().isoformat() if first else None,
@@ -197,6 +223,8 @@ def summarize(
         "years_active": years,
         "has_japanese": has_jp,
         "japanese_source": japanese_source,
+        "title": title,
+        "text_sample": text_sample,
     }
 
 

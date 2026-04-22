@@ -234,6 +234,24 @@
       margin-left: 4px;
     }
     .preview-btn:hover { background: #f2f7ff; }
+    .fav-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: #d0d3dc;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .fav-btn.on { color: #f6b93b; }
+    .fav-btn:hover { color: #f6b93b; }
+    .filter select {
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      min-width: 160px;
+    }
 
     /* Column-header tooltip "?" */
     .tip {
@@ -382,9 +400,17 @@
         <label><span>運用年数下限</span><span id="yearsValue">0</span></label>
         <input type="range" id="yearsMin" min="0" max="30" value="0" step="1">
       </div>
+      <div class="filter">
+        <label><span>ジャンル</span></label>
+        <select id="categoryFilter"><option value="">全て</option></select>
+      </div>
       <div class="filter checkbox">
         <input type="checkbox" id="jpOnly">
         <label for="jpOnly">日本語履歴ありのみ</label>
+      </div>
+      <div class="filter checkbox">
+        <input type="checkbox" id="favOnly">
+        <label for="favOnly">★ お気に入りのみ</label>
       </div>
       <div class="stats" id="stats"></div>
     </div>
@@ -393,7 +419,9 @@
       <table id="domains" class="display" style="width:100%">
         <thead>
           <tr>
+            <th>★</th>
             <th>ドメイン</th>
+            <th>ジャンル</th>
             <th>スコア</th>
             <th>DR</th>
             <th>参照ドメイン</th>
@@ -493,8 +521,24 @@
         return;
       }
 
+      const FAV_KEY = "olddomain.favs";
+      function loadFavs() {
+        try {
+          return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || "[]"));
+        } catch (e) { return new Set(); }
+      }
+      function saveFavs(set) {
+        localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set)));
+      }
+      const favs = loadFavs();
+
       const table = $("#domains").DataTable({
         data: rows.map(function (r) {
+          const favCell =
+            '<button type="button" class="fav-btn' +
+            (favs.has(r.domain) ? " on" : "") +
+            '" data-domain="' + escapeHtml(r.domain) +
+            '" title="お気に入り">★</button>';
           const domainCell =
             '<a href="' + waybackCalendarUrl(r.domain) +
             '" target="_blank" rel="noopener" title="Waybackで履歴を見る">' +
@@ -517,7 +561,9 @@
             (r.refdomains_lgjp || 0) +
             (r.refdomains_acjp || 0);
           return [
+            { display: favCell, value: favs.has(r.domain) ? 1 : 0 },
             { display: domainCell, value: r.domain },
+            r.category || "—",
             r.score,
             r.dr,
             r.refdomains,
@@ -533,11 +579,23 @@
         }),
         columns: [
           {
+            title: '★<span class="tip" data-tip="星をクリックでお気に入り登録。localStorageに保存されるのでブラウザを閉じても残ります。">?</span>',
+            orderable: true,
+            className: "fav-col",
+            render: function (data, type) {
+              if (type === "display") return data.display;
+              return data.value;
+            },
+          },
+          {
             title: 'ドメイン<span class="tip" data-tip="対象ドメイン名。クリックで Wayback Machine の履歴ページが開きます。">?</span>',
             render: function (data, type) {
               if (type === "display") return data.display;
               return data.value;
             },
+          },
+          {
+            title: 'ジャンル<span class="tip" data-tip="Waybackのタイトル/本文 + アンカーテキスト + ドメイン名から辞書マッチで推定。該当なしは「その他」。">?</span>',
           },
           {
             title: 'スコア<span class="tip" data-tip="100点満点の総合スコア。DR×0.4 + log10(参照ドメイン+1)×7(最大20) + 運用年数×2(最大15) + 日本語履歴15 − スパム50。80+緑 / 60-80黄 / <60灰。">?</span>',
@@ -568,7 +626,7 @@
             orderable: false,
           },
         ],
-        order: [[1, "desc"]],
+        order: [[3, "desc"]],
         pageLength: 50,
         lengthMenu: [25, 50, 100, 200, 500],
         scrollX: true,
@@ -593,6 +651,8 @@
       const jpTldMin  = document.getElementById("jpTldMin");
       const yearsMin  = document.getElementById("yearsMin");
       const jpOnly    = document.getElementById("jpOnly");
+      const favOnly   = document.getElementById("favOnly");
+      const categoryFilter = document.getElementById("categoryFilter");
 
       const scoreValue   = document.getElementById("scoreValue");
       const drValue      = document.getElementById("drValue");
@@ -622,6 +682,17 @@
       jpTldMin.max   = Math.max(10, maxJpTld);
       yearsMin.max   = Math.max(15, Math.ceil(sliderMax("years_active", 15)));
 
+      // Populate category dropdown from actual data
+      (function () {
+        const cats = new Set();
+        rows.forEach(function (r) { if (r.category) cats.add(r.category); });
+        Array.from(cats).sort().forEach(function (c) {
+          const opt = document.createElement("option");
+          opt.value = c; opt.textContent = c;
+          categoryFilter.appendChild(opt);
+        });
+      })();
+
       function updateStats() {
         stats.textContent =
           table.rows({ filter: "applied" }).count() +
@@ -643,6 +714,8 @@
         if (jpTldSum < Number(jpTldMin.value)) return false;
         if ((r.years_active || 0) < Number(yearsMin.value)) return false;
         if (jpOnly.checked && !r.has_japanese) return false;
+        if (favOnly.checked && !favs.has(r.domain)) return false;
+        if (categoryFilter.value && r.category !== categoryFilter.value) return false;
         return true;
       });
 
@@ -661,6 +734,34 @@
       [scoreMin, drMin, refMin, refipsMin, refclassMin, jpTldMin, yearsMin]
         .forEach(function (el) { el.addEventListener("input", apply); });
       jpOnly.addEventListener("change", apply);
+      favOnly.addEventListener("change", apply);
+      categoryFilter.addEventListener("change", apply);
+
+      // ---- Favorite toggle ----
+      document.querySelector("#domains tbody").addEventListener(
+        "click", function (e) {
+          var btn = e.target.closest(".fav-btn");
+          if (!btn) return;
+          var d = btn.getAttribute("data-domain");
+          if (!d) return;
+          if (favs.has(d)) {
+            favs.delete(d);
+            btn.classList.remove("on");
+          } else {
+            favs.add(d);
+            btn.classList.add("on");
+          }
+          saveFavs(favs);
+          // Update the underlying cell value so sorting/filtering picks it up.
+          var row = table.row($(btn).closest("tr"));
+          var d2 = row.data();
+          if (d2 && d2[0]) {
+            d2[0].value = favs.has(d) ? 1 : 0;
+            row.data(d2).draw(false);
+          }
+          if (favOnly.checked) apply();
+        }
+      );
 
       apply();
 

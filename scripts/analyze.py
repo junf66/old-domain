@@ -37,6 +37,121 @@ INPUT_DIR = ROOT / "data" / "input"
 OUTPUT_DIR = ROOT / "data" / "output"
 DOCS_DATA = ROOT / "docs" / "data.json"
 
+CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "SEO・アフィリ": [
+        "seo", "アフィリ", "アフィリエイト", "副業", "稼ぐ", "月収",
+        "在宅", "ネットビジネス", "物販", "転売",
+    ],
+    "金融・投資": [
+        "fx", "株式", "株価", "投資", "仮想通貨", "暗号資産", "ビットコイン",
+        "nft", "ローン", "クレジット", "保険", "資産運用", "ファイナンス",
+    ],
+    "美容・健康": [
+        "美容", "ダイエット", "スキンケア", "コスメ", "化粧品", "サプリ",
+        "育毛", "脱毛", "痩身", "エステ", "健康食品", "サプリメント",
+    ],
+    "医療・クリニック": [
+        "クリニック", "病院", "診療", "治療", "医師", "メディカル",
+        "歯科", "眼科", "皮膚科",
+    ],
+    "IT・開発": [
+        "プログラミング", "エンジニア", "python", "javascript", "typescript",
+        "php", "ruby", "java", "api", "devops", "クラウド", "aws",
+        "github", "フロントエンド", "バックエンド",
+    ],
+    "メディア・ブログ": [
+        "ニュース", "news", "ブログ", "blog", "メディア", "magazine",
+        "記事", "まとめ", "コラム",
+    ],
+    "EC・通販": [
+        "通販", "販売", "購入", "カート", "ec", "楽天", "amazon",
+        "ショップ", "shop", "store", "オンラインストア",
+    ],
+    "不動産": [
+        "不動産", "賃貸", "物件", "マンション", "戸建て", "中古住宅",
+        "土地", "売買", "リフォーム",
+    ],
+    "旅行・ホテル": [
+        "旅行", "観光", "ホテル", "旅館", "宿泊", "travel", "航空券",
+        "ツアー",
+    ],
+    "教育・学習": [
+        "教育", "学習", "スクール", "塾", "英会話", "eラーニング",
+        "オンライン学習", "通信講座", "資格",
+    ],
+    "求人・転職": [
+        "求人", "転職", "就職", "career", "キャリア", "job",
+        "エージェント", "採用", "アルバイト", "indeed",
+    ],
+    "エンタメ・ゲーム": [
+        "ゲーム", "game", "アニメ", "漫画", "マンガ", "映画", "音楽",
+        "アイドル", "芸能", "エンタメ",
+    ],
+    "スポーツ": [
+        "スポーツ", "野球", "サッカー", "ゴルフ", "テニス",
+        "フィットネス", "ジム", "ヨガ",
+    ],
+    "グルメ・食": [
+        "レシピ", "料理", "グルメ", "レストラン", "カフェ", "食べログ",
+        "食材", "お取り寄せ", "弁当",
+    ],
+    "自動車・バイク": [
+        "自動車", "中古車", "新車", "車検", "バイク", "整備",
+        "オートバイ",
+    ],
+    "結婚・出会い": [
+        "結婚", "婚活", "ウェディング", "出会い", "マッチング", "恋愛",
+    ],
+    "ビジネス・B2B": [
+        "法人", "ビジネス", "マーケティング", "経営", "コンサル",
+        "bpo", "saas", "営業支援",
+    ],
+    "公的・団体": [
+        "行政", "自治体", "市役所", "区役所", "協会", "財団", "学会",
+    ],
+}
+
+
+def _clean_category_hit(s: str, kw: str) -> int:
+    """Count occurrences of `kw` in `s` (case-insensitive)."""
+    if not s or not kw:
+        return 0
+    return s.lower().count(kw.lower())
+
+
+def categorize(
+    domain: str,
+    title: str,
+    text_sample: str,
+    anchors: list[dict],
+    org_keywords: int = 0,
+) -> tuple[str, dict[str, int]]:
+    """Return (best_category, score_by_category).
+
+    The title and domain name are weighted 3x, anchors 2x, body 1x.
+    """
+    title_s = (title or "").lower()
+    text_s = (text_sample or "").lower()
+    domain_s = (domain or "").lower().replace(".", " ")
+    anchor_s = " ".join((a.get("anchor") or "") for a in anchors or []).lower()
+
+    scores: dict[str, int] = {}
+    for cat, kws in CATEGORY_KEYWORDS.items():
+        s = 0
+        for kw in kws:
+            s += _clean_category_hit(title_s, kw) * 3
+            s += _clean_category_hit(domain_s, kw) * 3
+            s += _clean_category_hit(anchor_s, kw) * 2
+            s += _clean_category_hit(text_s, kw)
+        if s:
+            scores[cat] = s
+
+    if not scores:
+        return "その他", {}
+    best = max(scores.items(), key=lambda kv: kv[1])[0]
+    return best, scores
+
+
 SPAM_KEYWORDS = [
     "casino",
     "porn",
@@ -205,6 +320,8 @@ def analyze(
                 "snapshot_count": 42,
                 "years_active": 22.0,
                 "has_japanese": False,
+                "title": "Example blog about investment",
+                "text_sample": "投資 株式 fx",
             }
         else:
             row = _batch_row_for(domain, batch_rows)
@@ -237,9 +354,19 @@ def analyze(
                     "last_snapshot_ts": None,
                     "snapshot_count": 0,
                     "years_active": 0.0,
+                    "title": "",
+                    "text_sample": "",
                     "has_japanese": False,
                 }
             time.sleep(sleep_between)
+
+        category, _cat_scores = categorize(
+            domain=domain,
+            title=wayback.get("title", ""),
+            text_sample=wayback.get("text_sample", ""),
+            anchors=anchors,
+            org_keywords=org_kw,
+        )
 
         has_spam, spam_hits = detect_spam(anchors)
         score = compute_score(
@@ -268,6 +395,8 @@ def analyze(
                 "snapshot_count": wayback.get("snapshot_count", 0),
                 "years_active": wayback.get("years_active", 0.0),
                 "has_japanese": bool(wayback.get("has_japanese", False)),
+                "category": category,
+                "title": wayback.get("title", ""),
                 "has_spam": has_spam,
                 "spam_hits": spam_hits,
                 "top_anchors": [
