@@ -250,11 +250,10 @@
         <div class="modal-buttons">
           <button type="button" id="patCancel">キャンセル</button>
           <button type="button" id="patClear" class="secondary">トークンを削除</button>
-          <button type="button" id="pwdReset" class="secondary">パスワードを再設定</button>
           <button type="button" id="patSave" class="primary">保存</button>
         </div>
         <p class="modal-note">
-          トークンとパスワードハッシュはこのブラウザの localStorage にのみ保存されます(サーバには送信されません)。
+          トークンはこのブラウザの localStorage にのみ保存されます(サーバには送信されません)。
         </p>
       </div>
     </div>
@@ -497,50 +496,6 @@
       })();
 
       var PAT_KEY = "olddomain.github.pat";
-      var PWD_KEY = "olddomain.upload.pwdhash";
-
-      // ---- Password gate (client-side) -----------------------------
-      //
-      // This is NOT real server-side auth — the dashboard files are
-      // publicly served by GitHub Pages and anyone can view data.json
-      // directly. The gate only protects the *upload* action, so that
-      // someone who stumbles onto the page cannot push a CSV into the
-      // repo. A SHA-256 hash of the password is stored in localStorage
-      // (the plaintext never leaves the browser).
-      async function sha256Hex(s) {
-        var enc = new TextEncoder().encode(s);
-        var buf = await crypto.subtle.digest("SHA-256", enc);
-        var arr = Array.from(new Uint8Array(buf));
-        return arr.map(function (b) {
-          return b.toString(16).padStart(2, "0");
-        }).join("");
-      }
-
-      async function passwordOk() {
-        var stored = localStorage.getItem(PWD_KEY);
-        if (!stored) {
-          var p1 = prompt(
-            "アップロード用パスワードを設定してください。\n" +
-            "(このブラウザのみで使用、サーバには送信されません)"
-          );
-          if (!p1) return false;
-          var p2 = prompt("確認のためもう一度入力してください");
-          if (p1 !== p2) {
-            alert("パスワードが一致しませんでした。");
-            return false;
-          }
-          localStorage.setItem(PWD_KEY, await sha256Hex(p1));
-          return true;
-        }
-        var input = prompt("アップロード用パスワードを入力してください");
-        if (!input) return false;
-        var hash = await sha256Hex(input);
-        if (hash !== stored) {
-          alert("パスワードが違います。");
-          return false;
-        }
-        return true;
-      }
       var dz = document.getElementById("dropzone");
       var fi = document.getElementById("fileInput");
       var pickBtn = document.getElementById("pickBtn");
@@ -597,11 +552,6 @@
         }
         if (file.size > 5 * 1024 * 1024) {
           showStatus("ファイルが大きすぎます(5MB 上限)。", "error");
-          return;
-        }
-        var ok = await passwordOk();
-        if (!ok) {
-          showStatus("認証に失敗したためアップロードを中止しました。", "error");
           return;
         }
         var pat = getPat();
@@ -699,11 +649,6 @@
         removePat();
         patInput.value = "";
         showStatus("トークンを削除しました。", "info");
-        closeModal();
-      });
-      document.getElementById("pwdReset").addEventListener("click", function () {
-        localStorage.removeItem(PWD_KEY);
-        showStatus("パスワードをリセットしました。次回アップロード時に再設定します。", "info");
         closeModal();
       });
       patSave.addEventListener("click", function () {
