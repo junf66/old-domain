@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>中古ドメイン発掘ツール</title>
+
+  <!-- DataTables + jQuery via CDN -->
+  <link rel="stylesheet"
+    href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script
+    src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f7f7f9;
+      --panel: #ffffff;
+      --border: #e4e4ea;
+      --muted: #6a6a75;
+      --good: #d7f4df;
+      --mid: #fff7cf;
+      --low: #ececec;
+      --danger: #ffd1d1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: #1d1d22;
+      font-size: 14px;
+    }
+    header {
+      padding: 16px 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    header p { margin: 4px 0 0 0; color: var(--muted); font-size: 12px; }
+    main { padding: 16px 24px; }
+    .filters {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+    }
+    .filter { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+    .filter label {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    .filter input[type=range] { width: 100%; }
+    .filter.checkbox { flex-direction: row; align-items: center; gap: 6px; min-width: auto; }
+    .filter.checkbox label { font-size: 13px; color: #222; }
+    .stats { margin-left: auto; color: var(--muted); font-size: 12px; }
+    table.dataTable {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      width: 100% !important;
+    }
+    table.dataTable thead th {
+      background: #fafafc;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr.score-high   td { background: var(--good) !important; }
+    tr.score-mid    td { background: var(--mid) !important; }
+    tr.score-low    td { background: var(--low) !important; }
+    td.spam-yes {
+      color: #a71d1d;
+      font-weight: 600;
+    }
+    td.score-cell { font-weight: 700; }
+    a { color: #1a66d0; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+      background: var(--panel);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+    }
+    code {
+      background: #eef0f3;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>中古ドメイン発掘ツール</h1>
+    <p>
+      expireddomains.net の CSV を
+      <code>data/input/</code> に置き、
+      <code>python scripts/analyze.py</code> を実行すると
+      <code>docs/data.json</code> が更新され、このページに反映されます。
+    </p>
+  </header>
+
+  <main>
+    <div class="filters" id="filters">
+      <div class="filter">
+        <label>
+          <span>DR 下限</span>
+          <span id="drValue">0</span>
+        </label>
+        <input type="range" id="drMin" min="0" max="100" value="0" step="1">
+      </div>
+      <div class="filter">
+        <label>
+          <span>参照ドメイン下限</span>
+          <span id="refValue">0</span>
+        </label>
+        <input type="range" id="refMin" min="0" max="5000" value="0" step="10">
+      </div>
+      <div class="filter checkbox">
+        <input type="checkbox" id="jpOnly">
+        <label for="jpOnly">日本語履歴ありのみ</label>
+      </div>
+      <div class="filter checkbox">
+        <input type="checkbox" id="noSpam">
+        <label for="noSpam">スパムなしのみ</label>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div id="tableHost">
+      <table id="domains" class="display" style="width:100%">
+        <thead>
+          <tr>
+            <th>ドメイン</th>
+            <th>スコア</th>
+            <th>DR</th>
+            <th>参照ドメイン</th>
+            <th>運用年数</th>
+            <th>日本語履歴</th>
+            <th>スパム</th>
+            <th>Wayback</th>
+            <th>Ahrefs</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="empty" class="empty" style="display:none">
+      データがまだありません。<code>python scripts/analyze.py</code> を実行してください。
+    </div>
+  </main>
+
+  <script>
+    function escapeHtml(s) {
+      return String(s ?? "").replace(/[&<>"']/g, function (c) {
+        return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;",
+                 '"': "&quot;", "'": "&#39;" })[c];
+      });
+    }
+
+    function rowClass(score) {
+      if (score >= 80) return "score-high";
+      if (score >= 60) return "score-mid";
+      return "score-low";
+    }
+
+    function waybackUrl(d) {
+      return "https://web.archive.org/web/*/" + encodeURIComponent(d);
+    }
+    function ahrefsUrl(d) {
+      return "https://app.ahrefs.com/site-explorer/overview/v2/subdomains/recent?target="
+        + encodeURIComponent(d);
+    }
+
+    async function load() {
+      let rows = [];
+      try {
+        const r = await fetch("data.json", { cache: "no-store" });
+        rows = await r.json();
+      } catch (e) {
+        console.error(e);
+      }
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        document.getElementById("tableHost").style.display = "none";
+        document.getElementById("empty").style.display = "";
+        document.getElementById("stats").textContent = "0 件";
+        return;
+      }
+
+      const table = $("#domains").DataTable({
+        data: rows.map(function (r) {
+          const spamCell = r.has_spam
+            ? '<span class="spam-yes">⚠ ' +
+              escapeHtml((r.spam_hits || []).join(", ")) + "</span>"
+            : "—";
+          return [
+            escapeHtml(r.domain),
+            r.score,
+            r.dr,
+            r.refdomains,
+            r.years_active,
+            r.has_japanese ? "あり" : "—",
+            { display: spamCell, value: r.has_spam ? 1 : 0 },
+            '<a href="' + waybackUrl(r.domain) +
+              '" target="_blank" rel="noopener">Wayback</a>',
+            '<a href="' + ahrefsUrl(r.domain) +
+              '" target="_blank" rel="noopener">Ahrefs</a>',
+          ];
+        }),
+        columns: [
+          { title: "ドメイン" },
+          {
+            title: "スコア",
+            className: "score-cell",
+            createdCell: function (td, cellData) {
+              $(td).closest("tr").addClass(rowClass(cellData));
+            },
+          },
+          { title: "DR" },
+          { title: "参照ドメイン" },
+          { title: "運用年数" },
+          { title: "日本語履歴" },
+          {
+            title: "スパム",
+            render: function (data, type) {
+              if (type === "display") return data.display;
+              return data.value;
+            },
+            className: "spam-col",
+            createdCell: function (td, cellData) {
+              if (cellData && cellData.value) $(td).addClass("spam-yes");
+            },
+          },
+          { title: "Wayback", orderable: false },
+          { title: "Ahrefs", orderable: false },
+        ],
+        order: [[1, "desc"]],
+        pageLength: 50,
+        lengthMenu: [25, 50, 100, 200, 500],
+        language: {
+          search: "検索:",
+          lengthMenu: "表示件数 _MENU_",
+          info: "_TOTAL_ 件中 _START_-_END_ を表示",
+          infoEmpty: "0 件",
+          infoFiltered: " (全 _MAX_ 件から)",
+          paginate: { first: "«", last: "»", next: "›", previous: "‹" },
+          emptyTable: "データがありません",
+          zeroRecords: "条件に一致するデータがありません",
+        },
+      });
+
+      // ---- Filters ----
+      const drMin = document.getElementById("drMin");
+      const refMin = document.getElementById("refMin");
+      const jpOnly = document.getElementById("jpOnly");
+      const noSpam = document.getElementById("noSpam");
+      const drValue = document.getElementById("drValue");
+      const refValue = document.getElementById("refValue");
+      const stats = document.getElementById("stats");
+
+      // Auto-scale ref slider to data range.
+      const maxRef = rows.reduce(function (m, r) {
+        return Math.max(m, r.refdomains || 0);
+      }, 0);
+      refMin.max = Math.max(100, maxRef);
+
+      function updateStats() {
+        stats.textContent =
+          table.rows({ filter: "applied" }).count() +
+          " / " + rows.length + " 件";
+      }
+
+      $.fn.dataTable.ext.search.push(function (settings, rowArr, idx) {
+        const r = rows[idx];
+        if (!r) return true;
+        if ((r.dr || 0) < Number(drMin.value)) return false;
+        if ((r.refdomains || 0) < Number(refMin.value)) return false;
+        if (jpOnly.checked && !r.has_japanese) return false;
+        if (noSpam.checked && r.has_spam) return false;
+        return true;
+      });
+
+      function apply() {
+        drValue.textContent = drMin.value;
+        refValue.textContent = refMin.value;
+        table.draw();
+        updateStats();
+      }
+
+      [drMin, refMin].forEach(function (el) {
+        el.addEventListener("input", apply);
+      });
+      [jpOnly, noSpam].forEach(function (el) {
+        el.addEventListener("change", apply);
+      });
+
+      apply();
+    }
+
+    load();
+  </script>
+</body>
+</html>
