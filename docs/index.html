@@ -355,18 +355,32 @@
 
     <div class="filters" id="filters">
       <div class="filter">
-        <label>
-          <span>DR 下限</span>
-          <span id="drValue">0</span>
-        </label>
+        <label><span>スコア 下限</span><span id="scoreValue">0</span></label>
+        <input type="range" id="scoreMin" min="0" max="100" value="0" step="1">
+      </div>
+      <div class="filter">
+        <label><span>DR 下限</span><span id="drValue">0</span></label>
         <input type="range" id="drMin" min="0" max="100" value="0" step="1">
       </div>
       <div class="filter">
-        <label>
-          <span>参照ドメイン下限</span>
-          <span id="refValue">0</span>
-        </label>
+        <label><span>参照ドメイン下限</span><span id="refValue">0</span></label>
         <input type="range" id="refMin" min="0" max="5000" value="0" step="10">
+      </div>
+      <div class="filter">
+        <label><span>参照IP下限</span><span id="refipsValue">0</span></label>
+        <input type="range" id="refipsMin" min="0" max="5000" value="0" step="10">
+      </div>
+      <div class="filter">
+        <label><span>Cクラス下限</span><span id="refclassValue">0</span></label>
+        <input type="range" id="refclassMin" min="0" max="5000" value="0" step="10">
+      </div>
+      <div class="filter">
+        <label><span>go/lg/ac.jp 下限</span><span id="jpTldValue">0</span></label>
+        <input type="range" id="jpTldMin" min="0" max="50" value="0" step="1">
+      </div>
+      <div class="filter">
+        <label><span>運用年数下限</span><span id="yearsValue">0</span></label>
+        <input type="range" id="yearsMin" min="0" max="30" value="0" step="1">
       </div>
       <div class="filter checkbox">
         <input type="checkbox" id="jpOnly">
@@ -592,19 +606,43 @@
       });
 
       // ---- Filters ----
-      const drMin = document.getElementById("drMin");
-      const refMin = document.getElementById("refMin");
-      const jpOnly = document.getElementById("jpOnly");
-      const noSpam = document.getElementById("noSpam");
-      const drValue = document.getElementById("drValue");
-      const refValue = document.getElementById("refValue");
+      const scoreMin  = document.getElementById("scoreMin");
+      const drMin     = document.getElementById("drMin");
+      const refMin    = document.getElementById("refMin");
+      const refipsMin = document.getElementById("refipsMin");
+      const refclassMin = document.getElementById("refclassMin");
+      const jpTldMin  = document.getElementById("jpTldMin");
+      const yearsMin  = document.getElementById("yearsMin");
+      const jpOnly    = document.getElementById("jpOnly");
+      const noSpam    = document.getElementById("noSpam");
+
+      const scoreValue   = document.getElementById("scoreValue");
+      const drValue      = document.getElementById("drValue");
+      const refValue     = document.getElementById("refValue");
+      const refipsValue  = document.getElementById("refipsValue");
+      const refclassValue = document.getElementById("refclassValue");
+      const jpTldValue   = document.getElementById("jpTldValue");
+      const yearsValue   = document.getElementById("yearsValue");
       const stats = document.getElementById("stats");
 
-      // Auto-scale ref slider to data range.
-      const maxRef = rows.reduce(function (m, r) {
-        return Math.max(m, r.refdomains || 0);
+      // Auto-scale numeric sliders to the actual data range.
+      function sliderMax(key, fallback) {
+        const m = rows.reduce(function (acc, r) {
+          return Math.max(acc, Number(r[key] || 0));
+        }, 0);
+        return Math.max(fallback, m);
+      }
+      refMin.max     = sliderMax("refdomains", 100);
+      refipsMin.max  = sliderMax("refips", 100);
+      refclassMin.max = sliderMax("refclass_c", 100);
+      const maxJpTld = rows.reduce(function (acc, r) {
+        return Math.max(acc,
+          (r.refdomains_gojp || 0) +
+          (r.refdomains_lgjp || 0) +
+          (r.refdomains_acjp || 0));
       }, 0);
-      refMin.max = Math.max(100, maxRef);
+      jpTldMin.max   = Math.max(10, maxJpTld);
+      yearsMin.max   = Math.max(15, Math.ceil(sliderMax("years_active", 15)));
 
       function updateStats() {
         stats.textContent =
@@ -615,23 +653,36 @@
       $.fn.dataTable.ext.search.push(function (settings, rowArr, idx) {
         const r = rows[idx];
         if (!r) return true;
+        if ((r.score || 0) < Number(scoreMin.value)) return false;
         if ((r.dr || 0) < Number(drMin.value)) return false;
         if ((r.refdomains || 0) < Number(refMin.value)) return false;
+        if ((r.refips || 0) < Number(refipsMin.value)) return false;
+        if ((r.refclass_c || 0) < Number(refclassMin.value)) return false;
+        const jpTldSum =
+          (r.refdomains_gojp || 0) +
+          (r.refdomains_lgjp || 0) +
+          (r.refdomains_acjp || 0);
+        if (jpTldSum < Number(jpTldMin.value)) return false;
+        if ((r.years_active || 0) < Number(yearsMin.value)) return false;
         if (jpOnly.checked && !r.has_japanese) return false;
         if (noSpam.checked && r.has_spam) return false;
         return true;
       });
 
       function apply() {
-        drValue.textContent = drMin.value;
-        refValue.textContent = refMin.value;
+        scoreValue.textContent    = scoreMin.value;
+        drValue.textContent       = drMin.value;
+        refValue.textContent      = refMin.value;
+        refipsValue.textContent   = refipsMin.value;
+        refclassValue.textContent = refclassMin.value;
+        jpTldValue.textContent    = jpTldMin.value;
+        yearsValue.textContent    = yearsMin.value;
         table.draw();
         updateStats();
       }
 
-      [drMin, refMin].forEach(function (el) {
-        el.addEventListener("input", apply);
-      });
+      [scoreMin, drMin, refMin, refipsMin, refclassMin, jpTldMin, yearsMin]
+        .forEach(function (el) { el.addEventListener("input", apply); });
       [jpOnly, noSpam].forEach(function (el) {
         el.addEventListener("change", apply);
       });
