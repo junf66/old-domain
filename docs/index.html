@@ -197,6 +197,43 @@
     .modal-note {
       font-size: 11px; color: var(--muted); margin: 12px 0 0 0;
     }
+    .preview-inner {
+      max-width: 95vw;
+      width: 1100px;
+      padding: 10px 12px;
+    }
+    .preview-head {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .preview-head strong { font-size: 14px; }
+    .preview-head #previewClose {
+      margin-left: auto;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #previewFrame {
+      width: 100%;
+      height: 70vh;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+    }
+    .preview-btn {
+      background: transparent;
+      border: 1px solid #c9d1df;
+      color: #1a66d0;
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .preview-btn:hover { background: #f2f7ff; }
   </style>
 </head>
 <body>
@@ -218,6 +255,19 @@
       </div>
       <div id="uploadStatus" class="status" hidden></div>
     </section>
+
+    <!-- Wayback preview modal -->
+    <div id="previewModal" class="modal" hidden>
+      <div class="modal-inner preview-inner">
+        <div class="preview-head">
+          <strong id="previewTitle">プレビュー</strong>
+          <a id="previewOpen" href="#" target="_blank" rel="noopener" class="link-btn">別タブで開く ↗</a>
+          <button type="button" id="previewClose">閉じる</button>
+        </div>
+        <iframe id="previewFrame" src="about:blank"
+                referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>
+      </div>
+    </div>
 
     <!-- PAT setup modal -->
     <div id="patModal" class="modal" hidden>
@@ -331,8 +381,40 @@
       return "http://" + d;
     }
     function ahrefsUrl(d) {
-      return "https://app.ahrefs.com/site-explorer/overview/v2/subdomains/recent?target="
-        + encodeURIComponent(d);
+      // Backlinks view, one-per-domain, DR desc — matches the user's preferred
+      // deep-link template.
+      var params = [
+        ["anchorRules", ""],
+        ["bestFilter", "all"],
+        ["domainNameRules", ""],
+        ["filterLiveOnly", "0"],
+        ["followType", "all"],
+        ["grouping", "one-per-domain"],
+        ["hiddenColumns", "PageCategory"],
+        ["highlightChanges", "6m"],
+        ["history", "all"],
+        ["ipRules", ""],
+        ["limit", "100"],
+        ["mode", "subdomains"],
+        ["offset", "0"],
+        ["refPageAuthorRules", ""],
+        ["refPageTitleRules", ""],
+        ["refPageUrlRules", ""],
+        ["sort", "Dr"],
+        ["sortDirection", "desc"],
+        ["surroundingRules", ""],
+        ["target", d + "/"],
+        ["targetUrlRules", ""],
+      ];
+      var qs = params
+        .map(function (p) { return p[0] + "=" + encodeURIComponent(p[1]); })
+        .join("&");
+      return "https://app.ahrefs.com/site-explorer/backlinks?" + qs;
+    }
+    function waybackPreviewUrl(d, ts) {
+      // Prefer the exact timestamp; fall back to "2" which redirects to
+      // the most recent archived copy.
+      return "https://web.archive.org/web/" + (ts || "2") + "/" + d;
     }
 
     async function load() {
@@ -365,12 +447,21 @@
             '<a href="' + waybackCalendarUrl(r.domain) +
             '" target="_blank" rel="noopener" title="スナップショット一覧">📅 履歴</a>' +
             ' <a href="' + waybackLatestUrl(r.domain) +
-            '" target="_blank" rel="noopener" title="最新アーカイブ">🕘 最新</a>';
+            '" target="_blank" rel="noopener" title="最新アーカイブ">🕘 最新</a>' +
+            ' <button type="button" class="preview-btn"' +
+            ' data-domain="' + escapeHtml(r.domain) + '"' +
+            ' data-ts="' + escapeHtml(r.last_snapshot_ts || "") + '"' +
+            ' title="このページ内でプレビュー">🖼 プレビュー</button>';
+          const eduGovCell = (r.refdomains_edu || 0) + " / " + (r.refdomains_gov || 0);
           return [
             { display: domainCell, value: r.domain },
             r.score,
             r.dr,
+            r.ahrefs_rank || 0,
             r.refdomains,
+            r.refips || 0,
+            r.refclass_c || 0,
+            { display: eduGovCell, value: (r.refdomains_edu || 0) + (r.refdomains_gov || 0) },
             r.years_active,
             r.has_japanese ? "あり" : "—",
             { display: spamCell, value: r.has_spam ? 1 : 0 },
@@ -395,7 +486,17 @@
             },
           },
           { title: "DR" },
+          { title: "AhrefsRank" },
           { title: "参照ドメイン" },
+          { title: "参照IP" },
+          { title: "Cクラス" },
+          {
+            title: "edu/gov",
+            render: function (data, type) {
+              if (type === "display") return data.display;
+              return data.value;
+            },
+          },
           { title: "運用年数" },
           { title: "日本語履歴" },
           {
@@ -473,6 +574,37 @@
       });
 
       apply();
+
+      // ---- Preview modal (Wayback latest snapshot) ----
+      var previewModal = document.getElementById("previewModal");
+      var previewFrame = document.getElementById("previewFrame");
+      var previewTitle = document.getElementById("previewTitle");
+      var previewOpen = document.getElementById("previewOpen");
+      var previewClose = document.getElementById("previewClose");
+      function closePreview() {
+        previewModal.hidden = true;
+        previewFrame.src = "about:blank";
+      }
+      previewClose.addEventListener("click", closePreview);
+      previewModal.addEventListener("click", function (e) {
+        if (e.target === previewModal) closePreview();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !previewModal.hidden) closePreview();
+      });
+      document.querySelector("#domains tbody").addEventListener(
+        "click", function (e) {
+          var btn = e.target.closest(".preview-btn");
+          if (!btn) return;
+          var domain = btn.getAttribute("data-domain");
+          var ts = btn.getAttribute("data-ts") || "";
+          var url = waybackPreviewUrl(domain, ts);
+          previewTitle.textContent = domain;
+          previewOpen.href = url;
+          previewFrame.src = url;
+          previewModal.hidden = false;
+        }
+      );
     }
 
     load();

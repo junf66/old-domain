@@ -65,6 +65,11 @@ class AhrefsClient:
             "refdomains",
             "org_keywords",
             "org_traffic",
+            "ahrefs_rank",
+            "refips",
+            "refclass_c",
+            "refdomains_edu",
+            "refdomains_gov",
         ]
         for i in range(0, len(domains), 100):
             chunk = domains[i : i + 100]

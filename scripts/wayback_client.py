@@ -74,6 +74,7 @@ def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
         return {
             "first_snapshot": None,
             "last_snapshot": None,
+            "last_snapshot_ts": None,
             "snapshot_count": 0,
             "years_active": 0.0,
             "has_japanese": False,
@@ -102,6 +103,7 @@ def summarize(domain: str, timeout: int = 30) -> dict[str, Any]:
     return {
         "first_snapshot": first.date().isoformat() if first else None,
         "last_snapshot": last.date().isoformat() if last else None,
+        "last_snapshot_ts": last.strftime("%Y%m%d%H%M%S") if last else None,
         "snapshot_count": len(rows),
         "years_active": years,
         "has_japanese": has_jp,

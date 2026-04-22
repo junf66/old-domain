@@ -182,10 +182,16 @@ def analyze(
             refdomains = 123
             org_kw = 50
             org_tr = 100
+            ahrefs_rank = 123456
+            refips = 110
+            refclass_c = 80
+            refdomains_edu = 2
+            refdomains_gov = 1
             anchors = [{"anchor": "example", "refdomains": 5, "backlinks": 10}]
             wayback = {
                 "first_snapshot": "2001-06-01",
                 "last_snapshot": "2023-06-01",
+                "last_snapshot_ts": "20230601000000",
                 "snapshot_count": 42,
                 "years_active": 22.0,
                 "has_japanese": False,
@@ -196,6 +202,11 @@ def analyze(
             refdomains = int(_f(row, "refdomains"))
             org_kw = int(_f(row, "org_keywords"))
             org_tr = int(_f(row, "org_traffic"))
+            ahrefs_rank = int(_f(row, "ahrefs_rank"))
+            refips = int(_f(row, "refips"))
+            refclass_c = int(_f(row, "refclass_c"))
+            refdomains_edu = int(_f(row, "refdomains_edu"))
+            refdomains_gov = int(_f(row, "refdomains_gov"))
             try:
                 anchors = client.site_explorer_anchors(domain, limit=20)
             except Exception as exc:
@@ -208,6 +219,7 @@ def analyze(
                 wayback = {
                     "first_snapshot": None,
                     "last_snapshot": None,
+                    "last_snapshot_ts": None,
                     "snapshot_count": 0,
                     "years_active": 0.0,
                     "has_japanese": False,
@@ -230,8 +242,14 @@ def analyze(
                 "refdomains": refdomains,
                 "org_keywords": org_kw,
                 "org_traffic": org_tr,
+                "ahrefs_rank": ahrefs_rank,
+                "refips": refips,
+                "refclass_c": refclass_c,
+                "refdomains_edu": refdomains_edu,
+                "refdomains_gov": refdomains_gov,
                 "first_snapshot": wayback.get("first_snapshot"),
                 "last_snapshot": wayback.get("last_snapshot"),
+                "last_snapshot_ts": wayback.get("last_snapshot_ts"),
                 "snapshot_count": wayback.get("snapshot_count", 0),
                 "years_active": wayback.get("years_active", 0.0),
                 "has_japanese": bool(wayback.get("has_japanese", False)),
