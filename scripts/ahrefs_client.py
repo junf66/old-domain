@@ -59,15 +59,13 @@ class AhrefsClient:
         """
         domains = [d.strip() for d in domains if d and d.strip()]
         results: list[dict] = []
-        select = ",".join(
-            [
-                "url",
-                "domain_rating",
-                "refdomains",
-                "org_keywords",
-                "org_traffic",
-            ]
-        )
+        select = [
+            "url",
+            "domain_rating",
+            "refdomains",
+            "org_keywords",
+            "org_traffic",
+        ]
         for i in range(0, len(domains), 100):
             chunk = domains[i : i + 100]
             body = {
