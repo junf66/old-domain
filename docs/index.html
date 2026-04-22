@@ -253,40 +253,35 @@
       vertical-align: middle;
     }
     .tip:hover { background: #1a66d0; }
-    .tip:hover::after {
-      content: attr(data-tip);
-      position: absolute;
-      bottom: calc(100% + 6px);
-      left: 50%;
-      transform: translateX(-50%);
+    /* Body-level popup so scroll containers can't clip it */
+    .tip-popup {
+      position: fixed;
       background: #2b2b33;
       color: white;
       padding: 8px 12px;
       border-radius: 5px;
-      white-space: pre-line;
       font-size: 12px;
-      font-weight: normal;
       line-height: 1.5;
-      text-align: left;
-      z-index: 2000;
-      min-width: 220px;
       max-width: 340px;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      min-width: 220px;
+      z-index: 10000;
+      transform: translate(-50%, -100%);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      white-space: pre-line;
+      text-align: left;
       pointer-events: none;
+      margin-top: -8px;
     }
-    .tip:hover::before {
+    .tip-popup[hidden] { display: none; }
+    .tip-popup::after {
       content: "";
       position: absolute;
-      bottom: calc(100% + 1px);
+      bottom: -5px;
       left: 50%;
       transform: translateX(-50%);
       border: 5px solid transparent;
       border-top-color: #2b2b33;
-      z-index: 2000;
-      pointer-events: none;
     }
-    /* Keep sort icon and tooltip from overlapping */
-    table.dataTable thead th .tip { cursor: help; }
   </style>
 </head>
 <body>
@@ -676,6 +671,28 @@
     }
 
     load();
+
+    // ---- Body-level tooltip (escapes DataTables scroll overflow) ----
+    (function () {
+      var tip = document.createElement("div");
+      tip.className = "tip-popup";
+      tip.hidden = true;
+      document.body.appendChild(tip);
+      document.addEventListener("mouseover", function (e) {
+        var el = e.target && e.target.closest && e.target.closest(".tip");
+        if (!el) return;
+        tip.textContent = el.getAttribute("data-tip") || "";
+        var rect = el.getBoundingClientRect();
+        tip.style.left = (rect.left + rect.width / 2) + "px";
+        tip.style.top = rect.top + "px";
+        tip.hidden = false;
+      });
+      document.addEventListener("mouseout", function (e) {
+        var el = e.target && e.target.closest && e.target.closest(".tip");
+        if (el) tip.hidden = true;
+      });
+      window.addEventListener("scroll", function () { tip.hidden = true; }, true);
+    })();
 
     // ============================================================
     //  CSV Uploader: writes to data/input/ via GitHub Contents API
