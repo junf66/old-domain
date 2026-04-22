@@ -215,25 +215,71 @@ def load_domains(csv_path: Path) -> list[str]:
 def compute_score(
     dr: float,
     refdomains: int,
+    refips: int,
+    refclass_c: int,
     years_active: float,
     has_japanese: bool,
+    refdomains_gojp: int,
+    refdomains_lgjp: int,
+    refdomains_acjp: int,
+    category: str,
     has_spam: bool,
 ) -> dict[str, Any]:
-    """Return score breakdown (0-100, minus spam penalty)."""
-    dr_pts = round(min(max(dr, 0), 100) * 0.4, 2)
-    ref_pts = round(min(math.log10(max(refdomains, 0) + 1) * 7, 20), 2)
-    years_pts = round(min(max(years_active, 0) * 2, 15), 2)
-    jp_pts = 15 if has_japanese else 0
+    """Compute the composite 0-∞ score.
+
+    Positive-capped components (total 80pt):
+      DR 30 / refdomains 15 / refips 5 / refclass_c 5 /
+      years 10 / japanese 10
+
+    Uncapped additive:
+      .go.jp × 30 + .lg.jp × 25 + .ac.jp × 20
+
+    Bonuses:
+      Distribution bonus (+5 if Cクラス/refips ≥ 0.7)
+      Category bonus (+5 if category == 公的・団体)
+
+    Penalties:
+      Spam -50 / PBN -20
+    """
+    dr_pts = min(max(dr, 0), 100) * 0.3
+    ref_pts = min(math.log10(max(refdomains, 0) + 1) * 5, 15)
+    refips_pts = min(math.log10(max(refips, 0) + 1) * 2, 5)
+    refclass_pts = min(math.log10(max(refclass_c, 0) + 1) * 2, 5)
+    years_pts = min(max(years_active, 0) * 1.25, 10)
+    jp_pts = 10 if has_japanese else 0
+    gov_pts = (
+        max(refdomains_gojp, 0) * 30
+        + max(refdomains_lgjp, 0) * 25
+        + max(refdomains_acjp, 0) * 20
+    )
+
+    ratio = (refclass_c / refips) if refips else 0.0
+    distribution_bonus = 5 if refips >= 1 and ratio >= 0.7 else 0
+    category_bonus = 5 if category == "公的・団体" else 0
+
     spam_penalty = -50 if has_spam else 0
-    total = dr_pts + ref_pts + years_pts + jp_pts + spam_penalty
+    pbn_penalty = -20 if (refips >= 30 and ratio < 0.3) else 0
+
+    total = (
+        dr_pts + ref_pts + refips_pts + refclass_pts
+        + years_pts + jp_pts + gov_pts
+        + distribution_bonus + category_bonus
+        + spam_penalty + pbn_penalty
+    )
     return {
         "score": round(total, 2),
         "score_breakdown": {
-            "dr": dr_pts,
-            "refdomains": ref_pts,
-            "years": years_pts,
+            "dr": round(dr_pts, 2),
+            "refdomains": round(ref_pts, 2),
+            "refips": round(refips_pts, 2),
+            "refclass_c": round(refclass_pts, 2),
+            "years": round(years_pts, 2),
             "japanese": jp_pts,
+            "gov_edu": gov_pts,
+            "distribution_bonus": distribution_bonus,
+            "category_bonus": category_bonus,
             "spam_penalty": spam_penalty,
+            "pbn_penalty": pbn_penalty,
         },
     }
 
@@ -372,8 +418,14 @@ def analyze(
         score = compute_score(
             dr=dr,
             refdomains=refdomains,
+            refips=refips,
+            refclass_c=refclass_c,
             years_active=wayback.get("years_active", 0.0),
             has_japanese=wayback.get("has_japanese", False),
+            refdomains_gojp=refdomains_gojp,
+            refdomains_lgjp=refdomains_lgjp,
+            refdomains_acjp=refdomains_acjp,
+            category=category,
             has_spam=has_spam,
         )
 

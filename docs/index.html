@@ -87,6 +87,7 @@
       font-size: 12px;
       border-bottom: 1px solid var(--border);
     }
+    tr.score-top    td { background: #c5ebd0 !important; }
     tr.score-high   td { background: var(--good) !important; }
     tr.score-mid    td { background: var(--mid) !important; }
     tr.score-low    td { background: var(--low) !important; }
@@ -463,6 +464,7 @@
     }
 
     function rowClass(score) {
+      if (score >= 100) return "score-top";
       if (score >= 80) return "score-high";
       if (score >= 60) return "score-mid";
       return "score-low";
@@ -511,9 +513,10 @@
       return "https://app.ahrefs.com/site-explorer/backlinks?" + qs;
     }
     function waybackPreviewUrl(d, ts) {
-      // Prefer the exact timestamp; fall back to "2" which redirects to
-      // the most recent archived copy.
-      return "https://web.archive.org/web/" + (ts || "2") + "/" + d;
+      // `if_` suffix asks Wayback to serve the snapshot framed (no toolbar).
+      // Fallback `2` redirects to the latest available snapshot.
+      var stamp = ts || "2";
+      return "https://web.archive.org/web/" + stamp + "if_/" + d;
     }
 
     async function load() {
@@ -542,14 +545,16 @@
         localStorage.setItem(FAV_KEY, JSON.stringify(Array.from(set)));
       }
       const favs = loadFavs();
+      function renderFavCell(domain) {
+        return '<button type="button" class="fav-btn' +
+          (favs.has(domain) ? " on" : "") +
+          '" data-domain="' + escapeHtml(domain) +
+          '" title="お気に入り">★</button>';
+      }
 
       const table = $("#domains").DataTable({
         data: rows.map(function (r) {
-          const favCell =
-            '<button type="button" class="fav-btn' +
-            (favs.has(r.domain) ? " on" : "") +
-            '" data-domain="' + escapeHtml(r.domain) +
-            '" title="お気に入り">★</button>';
+          const favCell = renderFavCell(r.domain);
           const domainCell =
             '<a href="' + waybackCalendarUrl(r.domain) +
             '" target="_blank" rel="noopener" title="Waybackで履歴を見る">' +
@@ -575,7 +580,7 @@
             { display: favCell, value: favs.has(r.domain) ? 1 : 0 },
             { display: domainCell, value: r.domain },
             r.category || "—",
-            r.score,
+            Math.round(r.score || 0),
             r.dr,
             r.refdomains,
             r.refips || 0,
@@ -609,7 +614,7 @@
             title: 'ジャンル<span class="tip" data-tip="Waybackのタイトル/本文 + アンカーテキスト + ドメイン名から辞書マッチで推定。該当なしは「その他」。">?</span>',
           },
           {
-            title: 'スコア<span class="tip" data-tip="100点満点の総合スコア。DR×0.4 + log10(参照ドメイン+1)×7(最大20) + 運用年数×2(最大15) + 日本語履歴15 − スパム50。80+緑 / 60-80黄 / <60灰。">?</span>',
+            title: 'スコア<span class="tip" data-tip="基本点(合計80pt): DR×0.3 / log10(参照D+1)×5(max15) / log10(参照IP+1)×2(max5) / log10(Cクラス+1)×2(max5) / 運用年数×1.25(max10) / 日本語履歴10。\n無上限加点: .go.jp×30 + .lg.jp×25 + .ac.jp×20。\nボーナス: 分散度(Cクラス÷参照IP≥0.7)+5 / ジャンル公的・団体 +5。\nペナルティ: スパム-50 / PBN疑惑(参照IP≥30かつCクラス÷参照IP<0.3)-20。\n色: 100+濃緑 / 80+緑 / 60-80黄 / <60灰。">?</span>',
             className: "score-cell",
             createdCell: function (td, cellData) {
               $(td).closest("tr").addClass(rowClass(cellData));
@@ -756,24 +761,31 @@
         e.stopPropagation();
         var d = btn.getAttribute("data-domain");
         if (!d) return;
-        if (favs.has(d)) {
-          favs.delete(d);
-          btn.classList.remove("on");
-        } else {
-          favs.add(d);
-          btn.classList.add("on");
-        }
+
+        // Toggle the Set first so DOM and data stay in sync.
+        var nowFav;
+        if (favs.has(d)) { favs.delete(d); nowFav = false; }
+        else              { favs.add(d);   nowFav = true; }
         saveFavs(favs);
+
+        // Update every rendered instance of this button (defensive against
+        // DataTables redraws replacing the clicked DOM node).
+        var all = document.querySelectorAll(".fav-btn");
+        for (var i = 0; i < all.length; i++) {
+          if (all[i].getAttribute("data-domain") === d) {
+            if (nowFav) all[i].classList.add("on");
+            else        all[i].classList.remove("on");
+          }
+        }
+
+        // Keep DataTables' internal data in sync so sort/filter work.
         var row = table.row($(btn).closest("tr"));
         var d2 = row.data();
         if (d2 && d2[0]) {
-          d2[0].value = favs.has(d) ? 1 : 0;
-          d2[0].display = d2[0].display.replace(
-            /class="fav-btn( on)?"/,
-            'class="fav-btn' + (favs.has(d) ? " on" : "") + '"'
-          );
+          d2[0] = { display: renderFavCell(d), value: nowFav ? 1 : 0 };
           row.data(d2);
         }
+
         if (favOnly.checked) apply();
       });
 
