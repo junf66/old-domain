@@ -452,7 +452,14 @@
             ' data-domain="' + escapeHtml(r.domain) + '"' +
             ' data-ts="' + escapeHtml(r.last_snapshot_ts || "") + '"' +
             ' title="このページ内でプレビュー">🖼 プレビュー</button>';
-          const eduGovCell = (r.refdomains_edu || 0) + " / " + (r.refdomains_gov || 0);
+          const jpDomainsCell =
+            (r.refdomains_gojp || 0) + " / " +
+            (r.refdomains_lgjp || 0) + " / " +
+            (r.refdomains_acjp || 0);
+          const jpDomainsValue =
+            (r.refdomains_gojp || 0) +
+            (r.refdomains_lgjp || 0) +
+            (r.refdomains_acjp || 0);
           return [
             { display: domainCell, value: r.domain },
             r.score,
@@ -461,7 +468,7 @@
             r.refdomains,
             r.refips || 0,
             r.refclass_c || 0,
-            { display: eduGovCell, value: (r.refdomains_edu || 0) + (r.refdomains_gov || 0) },
+            { display: jpDomainsCell, value: jpDomainsValue },
             r.years_active,
             r.has_japanese ? "あり" : "—",
             { display: spamCell, value: r.has_spam ? 1 : 0 },
@@ -491,7 +498,7 @@
           { title: "参照IP" },
           { title: "Cクラス" },
           {
-            title: "edu/gov",
+            title: "go/lg/ac.jp",
             render: function (data, type) {
               if (type === "display") return data.display;
               return data.value;

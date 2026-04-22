@@ -68,8 +68,6 @@ class AhrefsClient:
             "ahrefs_rank",
             "refips",
             "refclass_c",
-            "refdomains_edu",
-            "refdomains_gov",
         ]
         for i in range(0, len(domains), 100):
             chunk = domains[i : i + 100]
@@ -86,6 +84,24 @@ class AhrefsClient:
                 results.append(row)
             time.sleep(0.3)
         return results
+
+    def site_explorer_refdomains(
+        self, target: str, limit: int = 1000
+    ) -> list[dict]:
+        """Top referring domains by DR.
+
+        Used to count specific TLDs (.go.jp, .lg.jp, .ac.jp, …) locally
+        without burning one API call per TLD.
+        """
+        params = {
+            "target": target,
+            "mode": "domain",
+            "limit": limit,
+            "order_by": "domain_rating:desc",
+            "select": "domain,domain_rating",
+        }
+        data = self._get("site-explorer/refdomains", params=params)
+        return data.get("refdomains") or data.get("results") or []
 
     def site_explorer_anchors(
         self, target: str, limit: int = 20

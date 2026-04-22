@@ -144,6 +144,16 @@ def _batch_row_for(domain: str, batch: list[dict]) -> dict:
     return {}
 
 
+def _count_tld(refdoms: list[dict], suffix: str) -> int:
+    """Count referring domains whose host ends with `suffix` (case-insensitive)."""
+    n = 0
+    for r in refdoms or []:
+        host = (r.get("domain") or r.get("hostname") or "").lower().rstrip(".")
+        if host.endswith(suffix):
+            n += 1
+    return n
+
+
 def _f(row: dict, *keys, default: float = 0.0) -> float:
     for k in keys:
         v = row.get(k)
@@ -185,8 +195,9 @@ def analyze(
             ahrefs_rank = 123456
             refips = 110
             refclass_c = 80
-            refdomains_edu = 2
-            refdomains_gov = 1
+            refdomains_gojp = 0
+            refdomains_lgjp = 0
+            refdomains_acjp = 2
             anchors = [{"anchor": "example", "refdomains": 5, "backlinks": 10}]
             wayback = {
                 "first_snapshot": "2001-06-01",
@@ -205,8 +216,14 @@ def analyze(
             ahrefs_rank = int(_f(row, "ahrefs_rank"))
             refips = int(_f(row, "refips"))
             refclass_c = int(_f(row, "refclass_c"))
-            refdomains_edu = int(_f(row, "refdomains_edu"))
-            refdomains_gov = int(_f(row, "refdomains_gov"))
+            try:
+                refdoms = client.site_explorer_refdomains(domain, limit=1000)
+            except Exception as exc:
+                print(f"  refdomains fetch failed: {exc}")
+                refdoms = []
+            refdomains_gojp = _count_tld(refdoms, ".go.jp")
+            refdomains_lgjp = _count_tld(refdoms, ".lg.jp")
+            refdomains_acjp = _count_tld(refdoms, ".ac.jp")
             try:
                 anchors = client.site_explorer_anchors(domain, limit=20)
             except Exception as exc:
@@ -245,8 +262,9 @@ def analyze(
                 "ahrefs_rank": ahrefs_rank,
                 "refips": refips,
                 "refclass_c": refclass_c,
-                "refdomains_edu": refdomains_edu,
-                "refdomains_gov": refdomains_gov,
+                "refdomains_gojp": refdomains_gojp,
+                "refdomains_lgjp": refdomains_lgjp,
+                "refdomains_acjp": refdomains_acjp,
                 "first_snapshot": wayback.get("first_snapshot"),
                 "last_snapshot": wayback.get("last_snapshot"),
                 "last_snapshot_ts": wayback.get("last_snapshot_ts"),
