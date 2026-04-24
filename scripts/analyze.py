@@ -376,7 +376,7 @@ def analyze(
             org_kw = int(_f(row, "org_keywords"))
             org_tr = int(_f(row, "org_traffic"))
             refips = int(_f(row, "refips"))
-            refclass_c = int(_f(row, "refclass_c"))
+            refclass_c = int(_f(row, "refips_subnets", "refclass_c"))
             try:
                 refdoms = client.site_explorer_refdomains(domain, limit=1000)
             except Exception as exc:

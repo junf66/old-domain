@@ -66,7 +66,7 @@ class AhrefsClient:
             "org_keywords",
             "org_traffic",
             "refips",
-            "refclass_c",
+            "refips_subnets",
         ]
         for i in range(0, len(domains), 100):
             chunk = domains[i : i + 100]
