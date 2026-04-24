@@ -176,8 +176,43 @@ DOMAIN_COLUMN_CANDIDATES = (
 
 
 def newest_csv(input_dir: Path) -> Path | None:
-    csvs = sorted(input_dir.glob("*.csv"), key=lambda p: p.stat().st_mtime)
-    return csvs[-1] if csvs else None
+    """Pick the best single CSV under `input_dir`.
+
+    Priority order:
+      1. Files whose name starts with `upload-` (dashboard uploads include
+         a timestamp in the filename), sorted desc by filename.
+      2. Any other CSV, sorted desc by filename.
+    """
+    csvs = list(input_dir.glob("*.csv"))
+    if not csvs:
+        return None
+    uploaded = [p for p in csvs if p.name.startswith("upload-")]
+    if uploaded:
+        return sorted(uploaded, key=lambda p: p.name)[-1]
+    return sorted(csvs, key=lambda p: p.name)[-1]
+
+
+def load_all_domains(input_dir: Path) -> list[str]:
+    """Merge domains from every CSV under `input_dir` (de-duplicated).
+
+    Useful when the user accumulates several exports; we still honour
+    `--input` if a specific path is given elsewhere.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for csv in sorted(input_dir.glob("*.csv"), key=lambda p: p.name):
+        try:
+            values = load_domains(csv)
+        except Exception as exc:
+            print(f"[input] SKIP {csv.name}: {exc}")
+            continue
+        print(f"[input] {csv.name}: {len(values)} domain(s)")
+        for v in values:
+            k = v.lower()
+            if k not in seen:
+                seen.add(k)
+                out.append(v)
+    return out
 
 
 def load_domains(csv_path: Path) -> list[str]:
@@ -496,19 +531,33 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Use stub data instead of calling Ahrefs/Wayback.",
     )
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Merge every CSV under data/input/ instead of only the newest.",
+    )
     args = parser.parse_args(argv)
 
-    csv_path = args.input or newest_csv(INPUT_DIR)
-    if csv_path is None:
-        print(f"No CSV found under {INPUT_DIR}. Put an export there first.")
-        return 1
-    print(f"[input] {csv_path}")
+    if args.input is not None:
+        print(f"[input] {args.input}")
+        domains = load_domains(args.input)
+    elif args.merge:
+        if not any(INPUT_DIR.glob("*.csv")):
+            print(f"No CSV found under {INPUT_DIR}. Put an export there first.")
+            return 1
+        domains = load_all_domains(INPUT_DIR)
+    else:
+        csv_path = newest_csv(INPUT_DIR)
+        if csv_path is None:
+            print(f"No CSV found under {INPUT_DIR}. Put an export there first.")
+            return 1
+        print(f"[input] {csv_path}")
+        domains = load_domains(csv_path)
 
-    domains = load_domains(csv_path)
     if not domains:
         print("CSV contains no domains.")
         return 1
-    print(f"[input] {len(domains)} domain(s)")
+    print(f"[input] total unique: {len(domains)} domain(s)")
 
     rows = analyze(domains, dry_run=args.dry_run)
     write_output(rows)
