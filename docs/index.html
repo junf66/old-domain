@@ -265,6 +265,276 @@
       min-width: 160px;
     }
 
+    /* ===== Mode tabs ===== */
+    .mode-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 24px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .mode-tab {
+      appearance: none;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .mode-tab:hover { color: #1a1a22; }
+    .mode-tab.active {
+      color: #1a66d0;
+      border-bottom-color: #1a66d0;
+    }
+    .mode-panel[hidden] { display: none; }
+
+    /* ===== WordPress mode ===== */
+    .wp-summary {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      flex-wrap: wrap;
+    }
+    .wp-stat { font-size: 12px; color: var(--muted); }
+    .wp-stat b { color: #1a1a22; font-size: 14px; margin-left: 4px; }
+    .wp-stat-pending b   { color: #b07300; }
+    .wp-stat-posted b    { color: #155cbf; }
+    .wp-stat-published b { color: #1e5c2b; }
+    .wp-stat-filler { flex: 1; }
+
+    .wp-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 1100px) {
+      .wp-layout { grid-template-columns: 1fr; }
+    }
+    .wp-left, .wp-right {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .wp-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .wp-toolbar-filler { flex: 1; }
+    .wp-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      background: white;
+    }
+    #wpSearch { flex: 0 0 220px; }
+    .wp-btn {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .wp-btn:hover { background: #f3f5f9; }
+    .wp-btn-primary {
+      background: #1a66d0;
+      color: white;
+      border-color: #1a66d0;
+    }
+    .wp-btn-primary:hover { background: #155cbf; }
+    .wp-btn-danger {
+      background: white;
+      color: #a71d1d;
+      border-color: #f5c2c2;
+    }
+    .wp-btn-danger:hover:not(:disabled) { background: #fce8e8; }
+    .wp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .wp-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .wp-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+    }
+    .wp-card summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 0;
+    }
+    .wp-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      margin-top: 10px;
+    }
+    .wp-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .wp-form input,
+    .wp-form select {
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      color: #1a1a22;
+      background: white;
+    }
+    .wp-form-wide { grid-column: 1 / -1; }
+    .wp-form-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .wp-form-note { font-size: 11px; color: var(--muted); }
+
+    .wp-table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .wp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .wp-table thead th {
+      text-align: left;
+      background: #fafafc;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .wp-table tbody td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #f0f0f4;
+      vertical-align: middle;
+    }
+    .wp-table tbody tr:hover { background: #f7faff; }
+    .wp-table .wp-row-status {
+      padding: 3px 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 12px;
+      background: white;
+    }
+    .wp-row-domain {
+      font-weight: 600;
+      font-size: 13px;
+      color: #1a1a22;
+    }
+    .wp-row-domain[contenteditable] { outline: none; }
+    .wp-row-domain[contenteditable]:focus {
+      background: #fff7d6;
+      box-shadow: inset 0 0 0 1px #f6b93b;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+    .wp-row-memo {
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .wp-row-memo[contenteditable] { white-space: normal; }
+    .wp-row-actions {
+      display: flex;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .wp-row-icon-btn {
+      background: transparent;
+      border: 1px solid #dde0e7;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #1a66d0;
+    }
+    .wp-row-icon-btn:hover { background: #eef4ff; }
+    .wp-row-icon-btn.danger { color: #a71d1d; border-color: #f5c2c2; }
+    .wp-row-icon-btn.danger:hover { background: #fce8e8; }
+    .wp-row-link {
+      display: inline-block;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+      font-size: 12px;
+    }
+    .wp-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .wp-empty[hidden] { display: none; }
+
+    .wp-bulk-bottom {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .wp-section-title {
+      margin: 4px 0 6px 0;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .wp-article-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .wp-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: vertical;
+      background: white;
+    }
+    .wp-textarea.mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .wp-textarea-small { min-height: 120px; }
+
     /* Column-header tooltip "?" */
     .tip {
       display: inline-block;
@@ -332,7 +602,13 @@
     </section>
   </header>
 
+  <nav class="mode-tabs" role="tablist">
+    <button type="button" class="mode-tab" data-mode="audit" role="tab">🔍 中古ドメイン精査</button>
+    <button type="button" class="mode-tab" data-mode="wp" role="tab">📝 WordPress投稿</button>
+  </nav>
+
   <main>
+    <section id="mode-audit" class="mode-panel" role="tabpanel">
 
     <!-- Wayback preview modal -->
     <div id="previewModal" class="modal" hidden>
@@ -453,6 +729,117 @@
     <div id="empty" class="empty" style="display:none">
       データがまだありません。<code>python scripts/analyze.py</code> を実行してください。
     </div>
+    </section>
+
+    <!-- ===== WordPress 投稿モード ===== -->
+    <section id="mode-wp" class="mode-panel" role="tabpanel" hidden>
+      <div class="wp-summary">
+        <span class="wp-stat">総数 <b id="wpTotal">0</b></span>
+        <span class="wp-stat wp-stat-pending">未対応 <b id="wpPending">0</b></span>
+        <span class="wp-stat wp-stat-posted">投稿済み <b id="wpPosted">0</b></span>
+        <span class="wp-stat wp-stat-published">公開済み <b id="wpPublished">0</b></span>
+        <span class="wp-stat-filler"></span>
+        <button type="button" id="wpJsonExport" class="wp-btn">📤 JSONエクスポート</button>
+        <button type="button" id="wpJsonImport" class="wp-btn">📥 JSONインポート</button>
+        <input type="file" id="wpJsonFile" accept=".json" hidden>
+      </div>
+
+      <div class="wp-layout">
+        <div class="wp-left">
+          <div class="wp-toolbar">
+            <input type="text" id="wpSearch" placeholder="🔎 ドメイン検索…" class="wp-input">
+            <select id="wpStatusFilter" class="wp-input">
+              <option value="all">全ステータス</option>
+              <option value="未対応">未対応</option>
+              <option value="投稿済み">投稿済み</option>
+              <option value="公開済み">公開済み</option>
+            </select>
+            <button type="button" id="wpSortToggle" class="wp-btn">ドメイン昇順</button>
+            <span class="wp-toolbar-filler"></span>
+            <button type="button" id="wpOpenLogins" class="wp-btn wp-btn-primary">🔐 ログインURL全部開く</button>
+            <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
+          </div>
+
+          <details class="wp-card" id="wpAddCard">
+            <summary>➕ サイトを追加</summary>
+            <div class="wp-form">
+              <label>ドメイン <input type="text" id="wpAddDomain" placeholder="example.com"></label>
+              <label>ログインURL <input type="text" id="wpAddLogin" placeholder="https://example.com/wp-admin/"></label>
+              <label>固定ページ編集URL <input type="text" id="wpAddEdit" placeholder="https://example.com/wp-admin/post.php?post=2&amp;action=edit"></label>
+              <label>ステータス
+                <select id="wpAddStatus">
+                  <option>未対応</option>
+                  <option>投稿済み</option>
+                  <option>公開済み</option>
+                </select>
+              </label>
+              <label class="wp-form-wide">メモ <input type="text" id="wpAddMemo" placeholder=""></label>
+              <div class="wp-form-actions">
+                <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加</button>
+                <button type="button" id="wpAddCancel" class="wp-btn">クリア</button>
+              </div>
+            </div>
+          </details>
+
+          <details class="wp-card">
+            <summary>📂 CSV インポート(ヘッダ: domain,wpLoginUrl,wpEditUrl,status,memo)</summary>
+            <div class="wp-form">
+              <input type="file" id="wpCsvFile" accept=".csv" class="wp-input">
+              <div class="wp-form-actions">
+                <button type="button" id="wpCsvImport" class="wp-btn wp-btn-primary">取り込む</button>
+                <span class="wp-form-note">既存ドメインは更新、新規は追加されます。</span>
+              </div>
+            </div>
+          </details>
+
+          <div class="wp-table-wrap">
+            <table id="wpSitesTable" class="wp-table">
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="wpSelectAll" title="全選択"></th>
+                  <th>ドメイン</th>
+                  <th>ログイン</th>
+                  <th>編集</th>
+                  <th>ステータス</th>
+                  <th>メモ</th>
+                  <th>更新</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="wpSitesBody"></tbody>
+            </table>
+            <div id="wpSitesEmpty" class="wp-empty">
+              まだサイトがありません。上の「サイトを追加」または「CSVインポート」から登録してください。
+            </div>
+          </div>
+
+          <div class="wp-bulk-bottom">
+            <button type="button" id="wpBulkDelete" class="wp-btn wp-btn-danger" disabled>選択中を削除</button>
+            <span class="wp-form-note" id="wpSelectedCount"></span>
+          </div>
+        </div>
+
+        <div class="wp-right">
+          <h3 class="wp-section-title">記事本文</h3>
+          <div class="wp-article-toolbar">
+            <span class="wp-form-note"><span id="wpArticleCount">0</span> 文字 / <span id="wpArticleBytes">0</span> bytes</span>
+            <span class="wp-toolbar-filler"></span>
+            <label class="wp-pill">
+              <input type="checkbox" id="wpArticleMono">
+              <span>等幅</span>
+            </label>
+            <button type="button" id="wpArticleCopy" class="wp-btn">📋 コピー</button>
+            <button type="button" id="wpArticleClear" class="wp-btn">🗑 クリア</button>
+          </div>
+          <textarea id="wpArticleBody" class="wp-textarea" rows="18"
+            placeholder="ペラサイト用の記事本文をここに貼り付け / 編集します。コピーボタンでクリップボードへ。"></textarea>
+
+          <h3 class="wp-section-title">共通メモ</h3>
+          <textarea id="wpSharedMemo" class="wp-textarea wp-textarea-small" rows="8"
+            placeholder="共通ID / 共通パスワード / 固定ページのスラッグ / 作業ルール など"></textarea>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -1061,6 +1448,582 @@
           showStatus("トークンを保存しました。", "success");
         }
       });
+    })();
+
+    // ================================================================
+    //  Mode switching (中古ドメイン精査 / WordPress投稿)
+    // ================================================================
+    (function () {
+      var MODE_KEY = "olddomain.mode";
+      var tabs = document.querySelectorAll(".mode-tab");
+      var panels = document.querySelectorAll(".mode-panel");
+      var dropzoneSection = document.getElementById("uploader");
+
+      function setMode(mode) {
+        if (mode !== "audit" && mode !== "wp") mode = "audit";
+        tabs.forEach(function (t) {
+          t.classList.toggle("active", t.getAttribute("data-mode") === mode);
+        });
+        panels.forEach(function (p) {
+          p.hidden = (p.id !== "mode-" + mode);
+        });
+        // Hide the CSV dropzone (header-side) outside audit mode.
+        if (dropzoneSection) {
+          dropzoneSection.style.display = (mode === "audit") ? "" : "none";
+        }
+        try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener("click", function () {
+          setMode(t.getAttribute("data-mode"));
+        });
+      });
+
+      var saved = "audit";
+      try { saved = localStorage.getItem(MODE_KEY) || "audit"; } catch (e) {}
+      setMode(saved);
+    })();
+
+    // ================================================================
+    //  WordPress 投稿モード
+    //  - All persistence is via localStorage. Future MCP/CLI hooks
+    //    (e.g. XServer MCP Server, XServer CLI for WP install) can read
+    //    `wpState.sites` directly from the exported JSON.
+    // ================================================================
+    (function () {
+      "use strict";
+
+      var WP_KEY = "olddomain.wpmode.v1";
+
+      /** @type {{ sites: Array, articleBody: string, sharedMemo: string,
+       *          searchKeyword: string, statusFilter: string, sortAsc: boolean,
+       *          articleMono: boolean }} */
+      var defaultState = {
+        sites: [],
+        articleBody: "",
+        sharedMemo: "",
+        searchKeyword: "",
+        statusFilter: "all",
+        sortAsc: true,
+        articleMono: false,
+      };
+
+      function loadState() {
+        try {
+          var raw = localStorage.getItem(WP_KEY);
+          if (!raw) return Object.assign({}, defaultState);
+          var parsed = JSON.parse(raw);
+          return Object.assign({}, defaultState, parsed || {});
+        } catch (e) {
+          return Object.assign({}, defaultState);
+        }
+      }
+      function saveState() {
+        try { localStorage.setItem(WP_KEY, JSON.stringify(state)); } catch (e) {}
+      }
+
+      var state = loadState();
+
+      // ---- helpers ----
+      function uid() {
+        return "s_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+      }
+      function nowIso() { return new Date().toISOString(); }
+      function fmtTs(iso) {
+        if (!iso) return "";
+        try {
+          var d = new Date(iso);
+          return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+            "-" + String(d.getDate()).padStart(2, "0") + " " +
+            String(d.getHours()).padStart(2, "0") + ":" +
+            String(d.getMinutes()).padStart(2, "0");
+        } catch (e) { return ""; }
+      }
+      function escapeHtml(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+          return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;",
+                    '"': "&quot;", "'": "&#39;" })[c];
+        });
+      }
+      function normalizeStatus(s) {
+        s = String(s || "").trim();
+        if (s === "投稿済み" || s === "公開済み") return s;
+        return "未対応";
+      }
+
+      // ---- DOM refs ----
+      var $ = function (id) { return document.getElementById(id); };
+      var tbody = $("wpSitesBody");
+      var empty = $("wpSitesEmpty");
+      var search = $("wpSearch");
+      var statusFilter = $("wpStatusFilter");
+      var sortToggle = $("wpSortToggle");
+      var selectAll = $("wpSelectAll");
+      var bulkDelete = $("wpBulkDelete");
+      var selectedCount = $("wpSelectedCount");
+      var article = $("wpArticleBody");
+      var articleCount = $("wpArticleCount");
+      var articleBytes = $("wpArticleBytes");
+      var articleMono = $("wpArticleMono");
+      var sharedMemo = $("wpSharedMemo");
+
+      var selected = new Set();
+
+      // ---- rendering ----
+      function visibleSites() {
+        var q = (state.searchKeyword || "").trim().toLowerCase();
+        var sf = state.statusFilter || "all";
+        var list = state.sites.filter(function (s) {
+          if (q && (s.domain || "").toLowerCase().indexOf(q) === -1 &&
+                   (s.memo || "").toLowerCase().indexOf(q) === -1) return false;
+          if (sf !== "all" && s.status !== sf) return false;
+          return true;
+        });
+        list.sort(function (a, b) {
+          var x = (a.domain || "").toLowerCase();
+          var y = (b.domain || "").toLowerCase();
+          if (x < y) return state.sortAsc ? -1 : 1;
+          if (x > y) return state.sortAsc ? 1 : -1;
+          return 0;
+        });
+        return list;
+      }
+
+      function renderSummary() {
+        var counts = { all: state.sites.length, "未対応": 0, "投稿済み": 0, "公開済み": 0 };
+        state.sites.forEach(function (s) {
+          var st = normalizeStatus(s.status);
+          counts[st] = (counts[st] || 0) + 1;
+        });
+        $("wpTotal").textContent = counts.all;
+        $("wpPending").textContent = counts["未対応"];
+        $("wpPosted").textContent = counts["投稿済み"];
+        $("wpPublished").textContent = counts["公開済み"];
+      }
+
+      function renderTable() {
+        var list = visibleSites();
+        // Drop selections that are no longer in the visible list.
+        selected.forEach(function (id) {
+          if (!state.sites.find(function (s) { return s.id === id; })) selected.delete(id);
+        });
+
+        if (list.length === 0) {
+          tbody.innerHTML = "";
+          empty.hidden = false;
+        } else {
+          empty.hidden = true;
+          var rows = list.map(function (s) {
+            var statusOptions = ["未対応", "投稿済み", "公開済み"].map(function (v) {
+              return '<option value="' + v + '"' +
+                (s.status === v ? " selected" : "") + ">" + v + "</option>";
+            }).join("");
+            return '<tr data-id="' + escapeHtml(s.id) + '">' +
+              '<td><input type="checkbox" class="wp-row-check"' +
+                (selected.has(s.id) ? " checked" : "") + '></td>' +
+              '<td><span class="wp-row-domain" contenteditable="true" data-field="domain">' +
+                escapeHtml(s.domain) + "</span></td>" +
+              '<td>' + linkCell(s.wpLoginUrl) + '</td>' +
+              '<td>' + linkCell(s.wpEditUrl) + '</td>' +
+              '<td><select class="wp-row-status" data-field="status">' + statusOptions + "</select></td>" +
+              '<td><span class="wp-row-memo" contenteditable="true" data-field="memo">' +
+                escapeHtml(s.memo) + "</span></td>" +
+              '<td><span class="wp-form-note">' + escapeHtml(fmtTs(s.updatedAt)) + "</span></td>" +
+              '<td class="wp-row-actions">' +
+                '<button class="wp-row-icon-btn" data-act="open-login" title="ログインを開く">🔐</button>' +
+                '<button class="wp-row-icon-btn" data-act="open-edit" title="編集を開く">✏️</button>' +
+                '<button class="wp-row-icon-btn" data-act="copy-login" title="ログインURLをコピー">📋L</button>' +
+                '<button class="wp-row-icon-btn" data-act="copy-edit" title="編集URLをコピー">📋E</button>' +
+                '<button class="wp-row-icon-btn danger" data-act="delete" title="削除">🗑</button>' +
+              "</td>" +
+            "</tr>";
+          });
+          tbody.innerHTML = rows.join("");
+        }
+
+        // Sync select-all + bulk delete state.
+        if (selectAll) selectAll.checked = list.length > 0 &&
+          list.every(function (s) { return selected.has(s.id); });
+        bulkDelete.disabled = selected.size === 0;
+        selectedCount.textContent = selected.size > 0
+          ? "(選択中 " + selected.size + " 件)" : "";
+      }
+
+      function linkCell(url) {
+        if (!url) return '<span class="wp-form-note">—</span>';
+        return '<a class="wp-row-link" href="' + escapeHtml(url) +
+          '" target="_blank" rel="noopener" title="' + escapeHtml(url) + '">' +
+          escapeHtml(url) + "</a>";
+      }
+
+      function render() {
+        renderSummary();
+        renderTable();
+      }
+
+      // ---- CRUD ----
+      function addSite(data) {
+        var domain = String(data.domain || "").trim();
+        if (!domain) { alert("ドメインは必須です。"); return null; }
+        var existing = state.sites.find(function (s) {
+          return (s.domain || "").toLowerCase() === domain.toLowerCase();
+        });
+        var now = nowIso();
+        if (existing) {
+          existing.wpLoginUrl = data.wpLoginUrl || existing.wpLoginUrl;
+          existing.wpEditUrl  = data.wpEditUrl  || existing.wpEditUrl;
+          existing.status     = normalizeStatus(data.status || existing.status);
+          existing.memo       = data.memo != null ? data.memo : existing.memo;
+          existing.updatedAt  = now;
+          return existing;
+        }
+        var site = {
+          id: uid(),
+          domain: domain,
+          wpLoginUrl: String(data.wpLoginUrl || ""),
+          wpEditUrl:  String(data.wpEditUrl  || ""),
+          status:     normalizeStatus(data.status),
+          memo:       String(data.memo || ""),
+          createdAt:  now,
+          updatedAt:  now,
+        };
+        state.sites.push(site);
+        return site;
+      }
+      function updateSite(id, patch) {
+        var s = state.sites.find(function (x) { return x.id === id; });
+        if (!s) return;
+        Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
+        s.updatedAt = nowIso();
+      }
+      function deleteSite(id) {
+        state.sites = state.sites.filter(function (s) { return s.id !== id; });
+        selected.delete(id);
+      }
+
+      // ---- CSV ----
+      function parseCsv(text) {
+        // Minimal CSV parser supporting quoted fields and embedded commas/newlines.
+        var rows = [];
+        var row = [];
+        var cur = "";
+        var inQuote = false;
+        for (var i = 0; i < text.length; i++) {
+          var c = text[i];
+          if (inQuote) {
+            if (c === '"') {
+              if (text[i + 1] === '"') { cur += '"'; i++; }
+              else { inQuote = false; }
+            } else { cur += c; }
+          } else {
+            if (c === '"') inQuote = true;
+            else if (c === ",") { row.push(cur); cur = ""; }
+            else if (c === "\n" || c === "\r") {
+              if (c === "\r" && text[i + 1] === "\n") i++;
+              row.push(cur); cur = "";
+              if (row.length > 1 || row[0] !== "") rows.push(row);
+              row = [];
+            } else { cur += c; }
+          }
+        }
+        if (cur !== "" || row.length > 0) { row.push(cur); rows.push(row); }
+        return rows;
+      }
+
+      function importCsvFile(file) {
+        var r = new FileReader();
+        r.onload = function () {
+          var rows = parseCsv(String(r.result || ""));
+          if (rows.length === 0) { alert("CSVが空です。"); return; }
+          var header = rows[0].map(function (h) { return String(h).trim(); });
+          var idx = {
+            domain: header.indexOf("domain"),
+            wpLoginUrl: header.indexOf("wpLoginUrl"),
+            wpEditUrl: header.indexOf("wpEditUrl"),
+            status: header.indexOf("status"),
+            memo: header.indexOf("memo"),
+          };
+          if (idx.domain < 0) {
+            alert("ヘッダに 'domain' 列が見つかりません。\n想定: domain,wpLoginUrl,wpEditUrl,status,memo");
+            return;
+          }
+          var added = 0, updated = 0;
+          for (var i = 1; i < rows.length; i++) {
+            var row = rows[i];
+            var d = (row[idx.domain] || "").trim();
+            if (!d) continue;
+            var before = state.sites.find(function (s) {
+              return (s.domain || "").toLowerCase() === d.toLowerCase();
+            });
+            addSite({
+              domain: d,
+              wpLoginUrl: idx.wpLoginUrl >= 0 ? row[idx.wpLoginUrl] : "",
+              wpEditUrl:  idx.wpEditUrl  >= 0 ? row[idx.wpEditUrl]  : "",
+              status:     idx.status     >= 0 ? row[idx.status]     : "未対応",
+              memo:       idx.memo       >= 0 ? row[idx.memo]       : "",
+            });
+            if (before) updated++; else added++;
+          }
+          saveState(); render();
+          alert("取り込み完了:新規 " + added + " 件 / 更新 " + updated + " 件");
+        };
+        r.readAsText(file);
+      }
+
+      // ---- JSON I/O ----
+      function exportJson() {
+        var payload = {
+          version: 1,
+          exportedAt: nowIso(),
+          sites: state.sites,
+          articleBody: state.articleBody,
+          sharedMemo: state.sharedMemo,
+        };
+        var blob = new Blob([JSON.stringify(payload, null, 2)],
+          { type: "application/json" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "wp-mode-" + new Date().toISOString().slice(0, 10) + ".json";
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      }
+      function importJsonFile(file) {
+        var r = new FileReader();
+        r.onload = function () {
+          try {
+            var data = JSON.parse(String(r.result || ""));
+            if (data && Array.isArray(data.sites)) {
+              if (!confirm("既存のサイト一覧/記事/メモを置き換えます。続行しますか?")) return;
+              state.sites = data.sites.map(function (s) {
+                return {
+                  id: s.id || uid(),
+                  domain: s.domain || "",
+                  wpLoginUrl: s.wpLoginUrl || "",
+                  wpEditUrl: s.wpEditUrl || "",
+                  status: normalizeStatus(s.status),
+                  memo: s.memo || "",
+                  createdAt: s.createdAt || nowIso(),
+                  updatedAt: s.updatedAt || nowIso(),
+                };
+              });
+              state.articleBody = data.articleBody != null ? data.articleBody : state.articleBody;
+              state.sharedMemo  = data.sharedMemo  != null ? data.sharedMemo  : state.sharedMemo;
+              saveState();
+              article.value = state.articleBody;
+              sharedMemo.value = state.sharedMemo;
+              updateArticleCount();
+              render();
+              alert("インポート完了: " + state.sites.length + " 件");
+            } else {
+              alert("不正なJSONです。");
+            }
+          } catch (e) { alert("読み込みエラー: " + e.message); }
+        };
+        r.readAsText(file);
+      }
+
+      // ---- bulk open ----
+      function openMany(urls, label) {
+        urls = urls.filter(Boolean);
+        if (urls.length === 0) { alert("開けるURLがありません。"); return; }
+        if (urls.length > 5) {
+          if (!confirm(urls.length + " 件の" + label + "を新規タブで開きます。続行しますか?")) return;
+        }
+        urls.forEach(function (u, i) {
+          // Stagger slightly so popup-blockers are less aggressive.
+          setTimeout(function () { window.open(u, "_blank", "noopener"); }, i * 80);
+        });
+      }
+
+      // ---- article ----
+      function updateArticleCount() {
+        var v = article.value || "";
+        articleCount.textContent = v.length;
+        // Bytes in UTF-8
+        try {
+          articleBytes.textContent = new Blob([v]).size;
+        } catch (e) {
+          articleBytes.textContent = v.length;
+        }
+      }
+
+      // ---- wire UI ----
+      function init() {
+        // Initial values from state
+        search.value       = state.searchKeyword || "";
+        statusFilter.value = state.statusFilter || "all";
+        sortToggle.textContent = state.sortAsc ? "ドメイン昇順" : "ドメイン降順";
+        article.value      = state.articleBody || "";
+        sharedMemo.value   = state.sharedMemo || "";
+        articleMono.checked = !!state.articleMono;
+        if (state.articleMono) article.classList.add("mono");
+        updateArticleCount();
+        render();
+
+        search.addEventListener("input", function () {
+          state.searchKeyword = search.value;
+          saveState(); renderTable();
+        });
+        statusFilter.addEventListener("change", function () {
+          state.statusFilter = statusFilter.value;
+          saveState(); renderTable();
+        });
+        sortToggle.addEventListener("click", function () {
+          state.sortAsc = !state.sortAsc;
+          sortToggle.textContent = state.sortAsc ? "ドメイン昇順" : "ドメイン降順";
+          saveState(); renderTable();
+        });
+
+        // Add form
+        $("wpAddSubmit").addEventListener("click", function () {
+          var data = {
+            domain:     $("wpAddDomain").value,
+            wpLoginUrl: $("wpAddLogin").value,
+            wpEditUrl:  $("wpAddEdit").value,
+            status:     $("wpAddStatus").value,
+            memo:       $("wpAddMemo").value,
+          };
+          var s = addSite(data);
+          if (s) {
+            ["wpAddDomain", "wpAddLogin", "wpAddEdit", "wpAddMemo"].forEach(function (i) {
+              $(i).value = "";
+            });
+            $("wpAddStatus").value = "未対応";
+            saveState(); render();
+          }
+        });
+        $("wpAddCancel").addEventListener("click", function () {
+          ["wpAddDomain", "wpAddLogin", "wpAddEdit", "wpAddMemo"].forEach(function (i) {
+            $(i).value = "";
+          });
+          $("wpAddStatus").value = "未対応";
+        });
+
+        // CSV
+        $("wpCsvImport").addEventListener("click", function () {
+          var f = $("wpCsvFile").files && $("wpCsvFile").files[0];
+          if (!f) { alert("CSVファイルを選んでください。"); return; }
+          importCsvFile(f);
+        });
+
+        // JSON
+        $("wpJsonExport").addEventListener("click", exportJson);
+        $("wpJsonImport").addEventListener("click", function () { $("wpJsonFile").click(); });
+        $("wpJsonFile").addEventListener("change", function (e) {
+          var f = e.target.files && e.target.files[0];
+          if (f) importJsonFile(f);
+          e.target.value = "";
+        });
+
+        // Bulk open
+        $("wpOpenLogins").addEventListener("click", function () {
+          openMany(visibleSites().map(function (s) { return s.wpLoginUrl; }), "ログインURL");
+        });
+        $("wpOpenEdits").addEventListener("click", function () {
+          openMany(visibleSites().map(function (s) { return s.wpEditUrl; }), "編集URL");
+        });
+
+        // Select-all
+        selectAll.addEventListener("change", function () {
+          var list = visibleSites();
+          if (selectAll.checked) list.forEach(function (s) { selected.add(s.id); });
+          else                   list.forEach(function (s) { selected.delete(s.id); });
+          renderTable();
+        });
+
+        // Bulk delete
+        bulkDelete.addEventListener("click", function () {
+          if (selected.size === 0) return;
+          if (!confirm(selected.size + " 件を削除します。よろしいですか?")) return;
+          Array.from(selected).forEach(deleteSite);
+          saveState(); render();
+        });
+
+        // Row interactions (event delegation)
+        tbody.addEventListener("click", function (e) {
+          var tr = e.target.closest("tr"); if (!tr) return;
+          var id = tr.getAttribute("data-id");
+          if (e.target.classList.contains("wp-row-check")) {
+            if (e.target.checked) selected.add(id); else selected.delete(id);
+            renderTable();
+            return;
+          }
+          var btn = e.target.closest(".wp-row-icon-btn");
+          if (!btn) return;
+          var act = btn.getAttribute("data-act");
+          var s = state.sites.find(function (x) { return x.id === id; });
+          if (!s) return;
+          if (act === "open-login" && s.wpLoginUrl) {
+            window.open(s.wpLoginUrl, "_blank", "noopener");
+          } else if (act === "open-edit" && s.wpEditUrl) {
+            window.open(s.wpEditUrl, "_blank", "noopener");
+          } else if (act === "copy-login") {
+            navigator.clipboard.writeText(s.wpLoginUrl || "");
+          } else if (act === "copy-edit") {
+            navigator.clipboard.writeText(s.wpEditUrl || "");
+          } else if (act === "delete") {
+            if (confirm("「" + s.domain + "」を削除します。よろしいですか?")) {
+              deleteSite(id); saveState(); render();
+            }
+          }
+        });
+
+        tbody.addEventListener("change", function (e) {
+          if (!e.target.classList.contains("wp-row-status")) return;
+          var tr = e.target.closest("tr"); if (!tr) return;
+          var id = tr.getAttribute("data-id");
+          updateSite(id, { status: normalizeStatus(e.target.value) });
+          saveState(); renderSummary();
+        });
+
+        tbody.addEventListener("blur", function (e) {
+          var el = e.target;
+          if (!el.hasAttribute || !el.hasAttribute("contenteditable")) return;
+          var tr = el.closest("tr"); if (!tr) return;
+          var id = tr.getAttribute("data-id");
+          var field = el.getAttribute("data-field");
+          if (!field) return;
+          var val = el.textContent.trim();
+          updateSite(id, { [field]: val });
+          saveState();
+        }, true);
+
+        // Article
+        article.addEventListener("input", function () {
+          state.articleBody = article.value;
+          saveState(); updateArticleCount();
+        });
+        $("wpArticleCopy").addEventListener("click", function () {
+          navigator.clipboard.writeText(article.value || "")
+            .then(function () { flash($("wpArticleCopy"), "✓ コピー済み"); });
+        });
+        $("wpArticleClear").addEventListener("click", function () {
+          if (!article.value) return;
+          if (!confirm("記事本文をクリアします。よろしいですか?")) return;
+          article.value = ""; state.articleBody = ""; saveState(); updateArticleCount();
+        });
+        articleMono.addEventListener("change", function () {
+          state.articleMono = articleMono.checked;
+          article.classList.toggle("mono", articleMono.checked);
+          saveState();
+        });
+
+        // Shared memo
+        sharedMemo.addEventListener("input", function () {
+          state.sharedMemo = sharedMemo.value;
+          saveState();
+        });
+      }
+
+      function flash(btn, text) {
+        var orig = btn.textContent;
+        btn.textContent = text;
+        setTimeout(function () { btn.textContent = orig; }, 1200);
+      }
+
+      init();
     })();
   </script>
 </body>
