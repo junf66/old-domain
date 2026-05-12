@@ -185,27 +185,106 @@ XServer不要。GitHub Actions の `WP runner (status-check)` ワークフロー
 
 ### `install`(WordPress 構築)
 
-GitHub Actions では処理せず、**Claude + XServer MCP Server** に処理させます。
+GitHub Actions では処理せず、**ローカルAIエージェント + XServer MCP Server** に
+処理させます。Web版の Claude / ChatGPT は MCP 経由のローカル実行ができないため
+**使えません**(XServer 公式の制限)。
 
-事前準備:
-- Claude Desktop(または互換クライアント)で **XServer MCP Server** を有効化
-- 同じクライアントで **GitHub MCP Server** も使えるようにする(リポジトリ読み書き用)
+#### 1. XServer 側の準備
 
-手順:
-1. ダッシュボードで対象サイトの行をチェック
-2. **🚀 WPインストールをキュー登録** をクリック
-3. リポジトリ `data/wp-install-queue.json` に `action: install` 行が追加される
-4. Claude にこう頼む:
-   > `junf66/old-domain` の `data/wp-install-queue.json` を読んで、
-   > 各 `action: install` アイテムを XServer MCP で処理し、
-   > 結果を `data/wp-install-results.json` に追記(同じスキーマ)、
-   > 処理済みアイテムをキューから削除して。
-5. Claude が XServer MCP の「ドメイン追加 → SSL → WP インストール」を実行
-6. ダッシュボードで **📥 結果を取り込む**
+- 対象プラン: スタンダード / プレミアム / ビジネス
+- XServerアカウントの「APIキー管理」で APIキー (`xs_...`) を発行
+- 契約管理画面でサーバー名を確認(例: `xs123456.xsrv.jp`)
 
-`results.json` には少なくとも `domain` / `ok` / `login_url` / `edit_url` /
-`admin_user` / `admin_password` / `front_page_id` を含むようにすると
-ダッシュボードのインポートで自動反映されます。
+#### 2. AIエージェントに XServer MCP を登録
+
+##### Claude Desktop
+
+設定ファイル (`claude_desktop_config.json`) に追記:
+
+- Mac:  `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Win:  `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "xserver": {
+      "command": "npx",
+      "args": ["-y", "xserver-mcp"],
+      "env": {
+        "XSERVER_API_KEY": "xs_xxxxxxxxxxxx",
+        "XSERVER_SERVERNAME": "xs123456.xsrv.jp"
+      }
+    }
+  }
+}
+```
+
+##### Cursor
+
+`.cursor/mcp.json` または `~/.cursor/mcp.json` に同じJSONを追加。
+
+##### Claude Code
+
+```bash
+claude mcp add --transport stdio xserver \
+  --env XSERVER_API_KEY=xs_xxxxxxxxxxxx \
+  --env XSERVER_SERVERNAME=xs123456.xsrv.jp \
+  -- npx -y xserver-mcp
+```
+
+##### 共通の前提
+
+- Node.js v18 以上(`https://nodejs.org/`)
+- 同じエージェントで GitHub MCP も併用すると、キュー/結果ファイルの
+  読み書きまで自動化できます。GitHub MCP がない場合はチャットに結果が
+  返るので、ダッシュボード側で「📥 最新を取り込む」前に手動で
+  `data/wp-install-results.json` に追記してください。
+
+#### 3. 動作確認
+
+エージェントに次のように話しかけて応答が返ればOK:
+
+```
+サーバー情報を表示してください
+ドメイン一覧を見せて
+```
+
+#### 4. 実運用フロー
+
+1. ダッシュボードでサイトの行をチェック
+2. **🚀 WPインストール** をクリック → `data/wp-install-queue.json` に
+   `action: install` アイテムが追加され、ダッシュボードが**そのまま貼り付け
+   可能なプロンプト**を表示
+3. プロンプトを Claude Desktop / Cursor / Claude Code に貼り付け
+4. エージェントが XServer MCP で「ドメイン追加 → SSL → WP簡単インストール」を実行
+5. 結果が `data/wp-install-results.json` に書き込まれる
+6. ダッシュボードで **📥 最新を取り込む** → 編集URL・admin情報・ステータスが反映
+
+#### XServer MCP で使う主な機能(本ツールが叩く部分)
+
+| 操作 | 用途 |
+|---|---|
+| ドメイン設定 / 追加 | サーバーにドメインを紐付け |
+| SSL設定 / インストール | Let's Encrypt 有効化 |
+| WordPress簡単インストール | WordPress 本体 + DB 自動構築 |
+
+#### 結果ファイル(`data/wp-install-results.json`)に書く形
+
+最低限こうしておくとダッシュボード側で自動マッピング:
+
+```json
+{
+  "action": "install",
+  "domain": "example.com",
+  "ok": true,
+  "login_url": "https://example.com/wp-admin/",
+  "edit_url":  "https://example.com/wp-admin/post.php?post=2&action=edit",
+  "admin_user": "admin",
+  "admin_password": "(自動生成パスワード)",
+  "front_page_id": 2,
+  "finished_at": "2026-05-12T05:00:00Z"
+}
+```
 
 ### MCP を使わずに手元で完結させたい場合
 
