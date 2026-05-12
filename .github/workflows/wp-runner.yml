@@ -1,0 +1,60 @@
+name: WP runner
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "data/wp-install-queue.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wp-runner-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # XServer CLI installation is intentionally left commented-out
+      # until you decide which distribution to use. Uncomment and adapt:
+      #
+      # - name: Install XServer CLI
+      #   run: |
+      #     curl -fsSL https://example.com/xserver-cli/install.sh | bash
+      #     echo "$HOME/.xserver-cli/bin" >> "$GITHUB_PATH"
+
+      - name: Run wp-runner
+        env:
+          XSERVER_API_KEY:   ${{ secrets.XSERVER_API_KEY }}
+          XSERVER_SERVER_ID: ${{ secrets.XSERVER_SERVER_ID }}
+          XSERVER_CLI_BIN:   ${{ secrets.XSERVER_CLI_BIN }}
+          WP_ADMIN_USER:     ${{ secrets.WP_ADMIN_USER }}
+          WP_ADMIN_EMAIL:    ${{ secrets.WP_ADMIN_EMAIL }}
+        run: python scripts/wp_runner.py
+
+      - name: Commit results / cleared queue
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/wp-install-queue.json data/wp-install-results.json
+          if git diff --staged --quiet; then
+            echo "No changes."
+          else
+            git commit -m "chore: wp-runner results (auto)"
+            git push
+          fi
