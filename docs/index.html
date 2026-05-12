@@ -743,10 +743,6 @@
         <span class="wp-stat wp-stat-pending">未対応 <b id="wpPending">0</b></span>
         <span class="wp-stat wp-stat-posted">投稿済み <b id="wpPosted">0</b></span>
         <span class="wp-stat wp-stat-published">公開済み <b id="wpPublished">0</b></span>
-        <span class="wp-stat-filler"></span>
-        <button type="button" id="wpJsonExport" class="wp-btn">📤 JSONエクスポート</button>
-        <button type="button" id="wpJsonImport" class="wp-btn">📥 JSONインポート</button>
-        <input type="file" id="wpJsonFile" accept=".json" hidden>
       </div>
 
       <div class="wp-layout">
@@ -1707,59 +1703,6 @@
         selected.delete(id);
       }
 
-      // ---- JSON I/O ----
-      function exportJson() {
-        var payload = {
-          version: 1,
-          exportedAt: nowIso(),
-          sites: state.sites,
-          articleBody: state.articleBody,
-          sharedMemo: state.sharedMemo,
-        };
-        var blob = new Blob([JSON.stringify(payload, null, 2)],
-          { type: "application/json" });
-        var a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "wp-mode-" + new Date().toISOString().slice(0, 10) + ".json";
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-      }
-      function importJsonFile(file) {
-        var r = new FileReader();
-        r.onload = function () {
-          try {
-            var data = JSON.parse(String(r.result || ""));
-            if (data && Array.isArray(data.sites)) {
-              if (!confirm("既存のサイト一覧/記事/メモを置き換えます。続行しますか?")) return;
-              state.sites = data.sites.map(function (s) {
-                return {
-                  id: s.id || uid(),
-                  domain: s.domain || "",
-                  wpLoginUrl: s.wpLoginUrl || "",
-                  wpEditUrl: s.wpEditUrl || "",
-                  status: normalizeStatus(s.status),
-                  memo: s.memo || "",
-                  createdAt: s.createdAt || nowIso(),
-                  updatedAt: s.updatedAt || nowIso(),
-                };
-              });
-              state.articleBody = data.articleBody != null ? data.articleBody : state.articleBody;
-              state.sharedMemo  = data.sharedMemo  != null ? data.sharedMemo  : state.sharedMemo;
-              saveState();
-              article.value = state.articleBody;
-              sharedMemo.value = state.sharedMemo;
-              updateArticleCount();
-              render();
-              alert("インポート完了: " + state.sites.length + " 件");
-            } else {
-              alert("不正なJSONです。");
-            }
-          } catch (e) { alert("読み込みエラー: " + e.message); }
-        };
-        r.readAsText(file);
-      }
-
       // ---- bulk open ----
       function openMany(urls, label) {
         urls = urls.filter(Boolean);
@@ -1868,15 +1811,6 @@
           $("wpAddDomain").value = "";
           $("wpAddMemo").value = "";
           $("wpAddStatus").value = "未対応";
-        });
-
-        // JSON
-        $("wpJsonExport").addEventListener("click", exportJson);
-        $("wpJsonImport").addEventListener("click", function () { $("wpJsonFile").click(); });
-        $("wpJsonFile").addEventListener("change", function (e) {
-          var f = e.target.files && e.target.files[0];
-          if (f) importJsonFile(f);
-          e.target.value = "";
         });
 
         // Bulk open
