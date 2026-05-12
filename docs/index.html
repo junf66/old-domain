@@ -1610,6 +1610,18 @@
         if (opts && opts.scrollTop !== false) {
           window.scrollTo({ top: 0, behavior: "instant" });
         }
+        // DataTables hates being initialized while hidden — when the audit
+        // panel becomes visible again, recompute column widths.
+        if (mode === "audit") {
+          setTimeout(function () {
+            try {
+              if (window.jQuery && jQuery.fn.dataTable &&
+                  jQuery.fn.dataTable.isDataTable("#domains")) {
+                jQuery("#domains").DataTable().columns.adjust().draw(false);
+              }
+            } catch (e) { /* table not ready yet */ }
+          }, 30);
+        }
       }
 
       tabs.forEach(function (t) {
