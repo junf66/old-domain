@@ -540,6 +540,36 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .wp-textarea-small { min-height: 120px; }
+    /* Step rows */
+    .wp-step-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+    }
+    .wp-step {
+      display: inline-block;
+      background: #1a66d0;
+      color: white;
+      width: 22px; height: 22px;
+      text-align: center;
+      line-height: 22px;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+    .wp-step-label {
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      min-width: 100px;
+    }
     .wp-patterns > summary {
       cursor: pointer;
       font-size: 12px;
@@ -785,34 +815,12 @@
 
       <div class="wp-layout">
         <div class="wp-left">
-          <div class="wp-toolbar">
-            <input type="text" id="wpSearch" placeholder="🔎 ドメイン検索…" class="wp-input">
-            <select id="wpStatusFilter" class="wp-input">
-              <option value="all">全ステータス</option>
-              <option value="未対応">未対応</option>
-              <option value="投稿済み">投稿済み</option>
-              <option value="公開済み">公開済み</option>
-            </select>
-            <button type="button" id="wpSortToggle" class="wp-btn">ドメイン昇順</button>
-            <span class="wp-toolbar-filler"></span>
-            <button type="button" id="wpOpenLogins" class="wp-btn wp-btn-primary">🔐 ログインURL全部開く</button>
-            <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
-          </div>
-
-          <div class="wp-toolbar">
-            <button type="button" id="wpQueueInstall" class="wp-btn wp-btn-primary"
-              title="選択中のドメインを XServer に WordPress 自動インストール依頼。Claude(XServer MCP)が処理し、結果は『最新を取り込む』で反映されます。">🚀 WPインストール</button>
-            <button type="button" id="wpQueueStatus" class="wp-btn"
-              title="選択中のドメインで WordPress が動いているか確認し、固定ページの編集URLを自動更新します。XServer不要、GitHub Actions が実行。">🔍 状態チェック</button>
-            <button type="button" id="wpResultsPull" class="wp-btn"
-              title="WPインストール依頼や状態チェックの結果を、この画面のサイト一覧に反映します。">📥 最新を取り込む</button>
-          </div>
-
+          <!-- STEP 1: 追加 + サーバー登録 -->
           <div class="wp-card wp-card-static">
-            <div class="wp-card-title">➕ サイトを追加(複数可:1行1ドメイン)</div>
+            <div class="wp-card-title"><span class="wp-step">①</span> サイトを追加 + サーバー登録</div>
             <div class="wp-form">
-              <label class="wp-form-wide">ドメイン
-                <textarea id="wpAddDomain" rows="4" placeholder="example.com&#10;example.net&#10;…一行に1ドメイン" class="wp-textarea wp-textarea-small"></textarea>
+              <label class="wp-form-wide">ドメイン(1行1ドメイン、任意で「| サイト名」)
+                <textarea id="wpAddDomain" rows="4" placeholder="example.com | サンプルサイト&#10;example.net&#10;…" class="wp-textarea wp-textarea-small"></textarea>
               </label>
               <details class="wp-form-wide wp-patterns">
                 <summary>URLパターンを編集する</summary>
@@ -839,9 +847,40 @@
                 <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加 + サーバー登録依頼</button>
                 <button type="button" id="wpAddOnly" class="wp-btn">リストのみ追加</button>
                 <button type="button" id="wpAddCancel" class="wp-btn">クリア</button>
-                <span class="wp-form-note">パターンの <code>{domain}</code> がドメインに置換されます。</span>
               </div>
             </div>
+          </div>
+
+          <!-- STEP 2: サーバー処理結果の取り込み / 状態チェック -->
+          <div class="wp-step-row">
+            <span class="wp-step-label"><span class="wp-step">②</span> 反映・確認</span>
+            <button type="button" id="wpResultsPull" class="wp-btn wp-btn-primary"
+              title="サーバー登録依頼や状態チェックの結果を、この画面のサイト一覧に反映します。">📥 最新を取り込む</button>
+            <button type="button" id="wpQueueStatus" class="wp-btn"
+              title="選択中のドメインで WordPress が動いているか確認し、固定ページの編集URLを自動更新します。">🔍 状態チェック</button>
+            <button type="button" id="wpQueueInstall" class="wp-btn"
+              title="選択中のドメインに対して WP インストールを再依頼します。">🚀 WPインストール再依頼</button>
+          </div>
+
+          <!-- STEP 3: 記事投稿のためにログイン/編集URLを開く -->
+          <div class="wp-step-row">
+            <span class="wp-step-label"><span class="wp-step">③</span> 記事を貼り付け</span>
+            <button type="button" id="wpOpenLogins" class="wp-btn wp-btn-primary">🔐 ログインURL全部開く</button>
+            <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
+            <span class="wp-form-note">記事本文(右)を 📋 コピーして各タブに貼り付け</span>
+          </div>
+
+          <!-- STEP 4: 一覧の検索・絞り込み -->
+          <div class="wp-step-row">
+            <span class="wp-step-label"><span class="wp-step">④</span> 一覧</span>
+            <input type="text" id="wpSearch" placeholder="🔎 ドメイン検索…" class="wp-input">
+            <select id="wpStatusFilter" class="wp-input">
+              <option value="all">全ステータス</option>
+              <option value="未対応">未対応</option>
+              <option value="投稿済み">投稿済み</option>
+              <option value="公開済み">公開済み</option>
+            </select>
+            <button type="button" id="wpSortToggle" class="wp-btn">ドメイン昇順</button>
           </div>
 
           <div class="wp-table-wrap">
@@ -850,6 +889,7 @@
                 <tr>
                   <th><input type="checkbox" id="wpSelectAll" title="全選択"></th>
                   <th>ドメイン</th>
+                  <th>サイト名</th>
                   <th>ログイン</th>
                   <th>編集</th>
                   <th>ステータス</th>
@@ -861,7 +901,7 @@
               <tbody id="wpSitesBody"></tbody>
             </table>
             <div id="wpSitesEmpty" class="wp-empty">
-              まだサイトがありません。上の「サイトを追加」または「CSVインポート」から登録してください。
+              まだサイトがありません。①「サイトを追加」から登録してください。
             </div>
           </div>
 
@@ -1681,6 +1721,8 @@
                 (selected.has(s.id) ? " checked" : "") + '></td>' +
               '<td><span class="wp-row-domain" contenteditable="true" data-field="domain">' +
                 escapeHtml(s.domain) + "</span></td>" +
+              '<td><span class="wp-row-memo" contenteditable="true" data-field="siteTitle">' +
+                escapeHtml(s.siteTitle || "") + "</span></td>" +
               '<td>' + linkCell(s.wpLoginUrl) + '</td>' +
               '<td>' + linkCell(s.wpEditUrl) + '</td>' +
               '<td><select class="wp-row-status" data-field="status">' + statusOptions + "</select></td>" +
@@ -1730,6 +1772,8 @@
         if (existing) {
           existing.wpLoginUrl = data.wpLoginUrl || existing.wpLoginUrl;
           existing.wpEditUrl  = data.wpEditUrl  || existing.wpEditUrl;
+          existing.siteTitle  = data.siteTitle != null && data.siteTitle !== ""
+            ? data.siteTitle : (existing.siteTitle || "");
           existing.status     = normalizeStatus(data.status || existing.status);
           existing.memo       = data.memo != null ? data.memo : existing.memo;
           existing.updatedAt  = now;
@@ -1738,6 +1782,7 @@
         var site = {
           id: uid(),
           domain: domain,
+          siteTitle:  String(data.siteTitle || ""),
           wpLoginUrl: String(data.wpLoginUrl || ""),
           wpEditUrl:  String(data.wpEditUrl  || ""),
           status:     normalizeStatus(data.status),
@@ -1832,10 +1877,19 @@
         // Add form (multi-domain input)
         async function performAdd(alsoEnqueueInstall) {
           var raw = $("wpAddDomain").value || "";
-          var domains = raw.split(/[\r\n,]+/)
-            .map(function (d) { return d.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); })
-            .filter(function (d) { return d.length > 0; });
-          if (domains.length === 0) {
+          // Each line is either "domain" or "domain | site title".
+          var rows = raw.split(/[\r\n]+/)
+            .map(function (line) {
+              var parts = line.split("|");
+              var d = (parts[0] || "")
+                .trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+              var t = parts.length > 1
+                ? parts.slice(1).join("|").trim()
+                : "";
+              return { domain: d, siteTitle: t };
+            })
+            .filter(function (r) { return r.domain.length > 0; });
+          if (rows.length === 0) {
             alert("ドメインを1つ以上入力してください。");
             return;
           }
@@ -1845,12 +1899,14 @@
           var memo   = $("wpAddMemo").value;
           var added = 0, updated = 0;
           var addedSites = [];
-          domains.forEach(function (d) {
+          rows.forEach(function (r) {
+            var d = r.domain;
             var before = state.sites.find(function (s) {
               return (s.domain || "").toLowerCase() === d.toLowerCase();
             });
             var s = addSite({
               domain: d,
+              siteTitle: r.siteTitle,
               wpLoginUrl: applyPattern(loginP, d),
               wpEditUrl:  applyPattern(editP, d),
               status: status,
@@ -2282,18 +2338,22 @@
       }
 
       function buildInstallPrompt(sites) {
-        var domains = sites.map(function (s) { return "- " + s.domain; }).join("\n");
+        var lines = sites.map(function (s) {
+          var title = s.siteTitle || s.domain;
+          return "- " + s.domain + "  (サイト名: " + title + ")";
+        }).join("\n");
         return [
           "以下を XServer MCP で実行してください。",
           "",
           "## 対象ドメイン",
-          domains,
+          lines,
           "",
           "## 各ドメインに対する手順",
           "1. 「ドメイン設定」で対象ドメインを追加",
           "2. 「SSL設定」で Let's Encrypt SSL をインストール",
           "3. 「WordPress簡単インストール」で WordPress を新規インストール",
           "   - admin_user は admin、admin_email は info@(ドメイン) で",
+          "   - サイト名(blogname / site_title)は上の括弧内を使用",
           "4. インストール後、固定ページのID(通常は2)を控える",
           "",
           "## 結果の書き戻し(GitHub MCP)",
@@ -2306,6 +2366,7 @@
           "{",
           '  "action": "install",',
           '  "domain": "<ドメイン>",',
+          '  "site_title": "<指定したサイト名>",',
           '  "ok": true,',
           '  "login_url": "https://<ドメイン>/wp-admin/",',
           '  "edit_url":  "https://<ドメイン>/wp-admin/post.php?post=<page_id>&action=edit",',
