@@ -311,26 +311,35 @@
     /* ===== WordPress mode ===== */
     .wp-summary {
       display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 14px;
+      align-items: stretch;
+      gap: 0;
+      margin-bottom: 16px;
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px 14px;
-      flex-wrap: wrap;
+      border-radius: 8px;
+      overflow: hidden;
     }
-    .wp-stat { font-size: 12px; color: var(--muted); }
-    .wp-stat b { color: #1a1a22; font-size: 14px; margin-left: 4px; }
+    .wp-stat {
+      flex: 1;
+      padding: 10px 16px;
+      font-size: 11px;
+      color: var(--muted);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .wp-stat:last-child { border-right: none; }
+    .wp-stat b { color: #1a1a22; font-size: 18px; font-weight: 700; }
     .wp-stat-pending b   { color: #b07300; }
     .wp-stat-posted b    { color: #155cbf; }
     .wp-stat-published b { color: #1e5c2b; }
-    .wp-stat-filler { flex: 1; }
+    .wp-stat-filler { display: none; }
 
     .wp-layout {
       display: grid;
       grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
-      gap: 16px;
+      gap: 20px;
     }
     @media (max-width: 1100px) {
       .wp-layout { grid-template-columns: 1fr; }
@@ -338,7 +347,7 @@
     .wp-left, .wp-right {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
     }
 
     .wp-toolbar {
@@ -389,8 +398,8 @@
     .wp-card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 14px;
+      border-radius: 8px;
+      padding: 14px 16px;
     }
     .wp-card summary {
       cursor: pointer;
@@ -400,8 +409,12 @@
     }
     .wp-card-static .wp-card-title {
       font-size: 13px;
-      font-weight: 600;
-      padding: 4px 0;
+      font-weight: 700;
+      padding: 0 0 8px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
     }
     .wp-form {
       display: grid;
@@ -437,7 +450,7 @@
     .wp-table-wrap {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       overflow: hidden;
     }
     .wp-table {
@@ -537,9 +550,18 @@
     }
     .wp-article-toolbar {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .wp-section-title {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .wp-textarea {
       width: 100%;
@@ -564,27 +586,28 @@
       flex-wrap: wrap;
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 12px;
+      border-radius: 8px;
+      padding: 10px 14px;
     }
     .wp-step {
-      display: inline-block;
+      display: inline-flex;
       background: #16a34a;
       color: white;
-      width: 22px; height: 22px;
-      text-align: center;
-      line-height: 22px;
+      width: 20px; height: 20px;
+      align-items: center;
+      justify-content: center;
       border-radius: 50%;
-      font-size: 12px;
-      font-weight: bold;
+      font-size: 11px;
+      font-weight: 700;
       margin-right: 6px;
+      flex-shrink: 0;
     }
     .wp-step-label {
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 700;
       display: inline-flex;
       align-items: center;
-      min-width: 100px;
+      min-width: 110px;
     }
     .wp-patterns > summary {
       cursor: pointer;
@@ -822,10 +845,10 @@
     <!-- ===== WordPress 投稿モード ===== -->
     <section id="mode-wp" class="mode-panel" role="tabpanel" hidden>
       <div class="wp-summary">
-        <span class="wp-stat">総数 <b id="wpTotal">0</b></span>
-        <span class="wp-stat wp-stat-pending">未対応 <b id="wpPending">0</b></span>
-        <span class="wp-stat wp-stat-posted">投稿済み <b id="wpPosted">0</b></span>
-        <span class="wp-stat wp-stat-published">公開済み <b id="wpPublished">0</b></span>
+        <div class="wp-stat"><span>総数</span><b id="wpTotal">0</b></div>
+        <div class="wp-stat wp-stat-pending"><span>未対応</span><b id="wpPending">0</b></div>
+        <div class="wp-stat wp-stat-posted"><span>投稿済み</span><b id="wpPosted">0</b></div>
+        <div class="wp-stat wp-stat-published"><span>公開済み</span><b id="wpPublished">0</b></div>
       </div>
 
       <div class="wp-layout">
@@ -869,7 +892,7 @@
           <!-- STEP 2: サーバー処理結果の取り込み / 状態チェック -->
           <div class="wp-step-row">
             <span class="wp-step-label"><span class="wp-step">②</span> 反映・確認</span>
-            <button type="button" id="wpResultsPull" class="wp-btn wp-btn-primary"
+            <button type="button" id="wpResultsPull" class="wp-btn"
               title="サーバー登録依頼や状態チェックの結果を、この画面のサイト一覧に反映します。">📥 最新を取り込む</button>
             <button type="button" id="wpQueueStatus" class="wp-btn"
               title="選択中のドメインで WordPress が動いているか確認し、固定ページの編集URLを自動更新します。">🔍 状態チェック</button>
@@ -880,9 +903,8 @@
           <!-- STEP 3: 記事投稿のためにログイン/編集URLを開く -->
           <div class="wp-step-row">
             <span class="wp-step-label"><span class="wp-step">③</span> 記事を貼り付け</span>
-            <button type="button" id="wpOpenLogins" class="wp-btn wp-btn-primary">🔐 ログインURL全部開く</button>
-            <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
-            <span class="wp-form-note">記事本文(右)を 📋 コピーして各タブに貼り付け</span>
+            <button type="button" id="wpOpenLogins" class="wp-btn">🔐 ログインURL全部開く</button>
+            <button type="button" id="wpOpenEdits" class="wp-btn">✏️ 編集URL全部開く</button>
           </div>
 
           <!-- STEP 4: 一覧の検索・絞り込み -->
