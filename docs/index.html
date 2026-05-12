@@ -627,8 +627,8 @@
         </div>
         <textarea id="wpPromptText" class="wp-textarea" rows="18" readonly></textarea>
         <p class="wp-form-note">
-          XServer MCP + GitHub MCP が有効な AI エージェント上で実行してください。<br>
-          Web 版の Claude / ChatGPT では MCP 経由の操作はできません。
+          ✅ モーダルを開いた時点でクリップボードへ自動コピー済みです。Claude Code に切り替えて <b>Ctrl+V → Enter</b> で送信してください。<br>
+          XServer MCP + GitHub MCP が有効な AI エージェント上で実行する必要があります。Web 版の Claude / ChatGPT では動きません。
         </p>
       </div>
     </div>
@@ -2299,8 +2299,23 @@
         var text = buildInstallPrompt(sites);
         var modal = document.getElementById("wpPromptModal");
         var ta = document.getElementById("wpPromptText");
+        var copyBtn = document.getElementById("wpPromptCopy");
         ta.value = text;
         modal.hidden = false;
+        // Auto-copy to clipboard so the next user action is just Ctrl+V in
+        // Claude Code (and Enter). Falls back to the manual button on
+        // permission failure.
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            if (copyBtn) {
+              var orig = copyBtn.textContent;
+              copyBtn.textContent = "✓ クリップボード済み";
+              setTimeout(function () { copyBtn.textContent = orig; }, 2000);
+            }
+          }).catch(function () {
+            // Ignore; the manual copy button still works.
+          });
+        }
       }
 
       (function () {
