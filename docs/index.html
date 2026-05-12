@@ -761,6 +761,13 @@
             <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
           </div>
 
+          <div class="wp-toolbar">
+            <button type="button" id="wpQueueStatus" class="wp-btn">🔍 状態確認をキュー登録</button>
+            <button type="button" id="wpQueueInstall" class="wp-btn wp-btn-primary">🚀 WPインストールをキュー登録</button>
+            <button type="button" id="wpResultsPull" class="wp-btn">📥 結果を取り込む</button>
+            <span class="wp-form-note">XServer CLI/MCP 連携(対象:選択中の行)</span>
+          </div>
+
           <div class="wp-card wp-card-static">
             <div class="wp-card-title">➕ サイトを追加(複数可:1行1ドメイン)</div>
             <div class="wp-form">
@@ -1918,6 +1925,182 @@
         btn.textContent = text;
         setTimeout(function () { btn.textContent = orig; }, 1200);
       }
+
+      // ---- Queue / results integration (Lv3) ----
+      //
+      // We reuse the GitHub PAT already stored for CSV uploads. The queue
+      // is a single file in the repo; once written, the wp-runner workflow
+      // picks it up. Results are committed back to a paired file that we
+      // pull on demand.
+      var REPO = (function () {
+        var host = location.host;
+        var parts = location.pathname.split("/").filter(Boolean);
+        if (host.endsWith(".github.io") && parts.length > 0) {
+          return host.split(".")[0] + "/" + parts[0];
+        }
+        return "junf66/old-domain";
+      })();
+      var QUEUE_PATH = "data/wp-install-queue.json";
+      var RESULTS_PATH = "data/wp-install-results.json";
+      var PAT_KEY = "olddomain.github.pat";
+
+      function getPat() { return localStorage.getItem(PAT_KEY) || ""; }
+
+      function selectedSites() {
+        return state.sites.filter(function (s) { return selected.has(s.id); });
+      }
+
+      async function ghGet(path) {
+        var url = "https://api.github.com/repos/" + REPO + "/contents/" + path;
+        var pat = getPat();
+        var headers = {
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        };
+        if (pat) headers["Authorization"] = "Bearer " + pat;
+        var r = await fetch(url, { headers: headers, cache: "no-store" });
+        if (r.status === 404) return { sha: null, content: null };
+        if (!r.ok) throw new Error("GET " + path + " → " + r.status);
+        var j = await r.json();
+        var raw = j.content
+          ? new TextDecoder().decode(
+              Uint8Array.from(atob(j.content.replace(/\n/g, "")), function (c) {
+                return c.charCodeAt(0);
+              })
+            )
+          : null;
+        return { sha: j.sha, content: raw };
+      }
+
+      async function ghPut(path, content, message, sha) {
+        var url = "https://api.github.com/repos/" + REPO + "/contents/" + path;
+        var pat = getPat();
+        if (!pat) throw new Error("GitHubトークンが未設定です。中古ドメイン精査タブのアップロード機能から先にトークンを登録してください。");
+        var b64 = btoa(unescape(encodeURIComponent(content)));
+        var body = { message: message, content: b64 };
+        if (sha) body.sha = sha;
+        var r = await fetch(url, {
+          method: "PUT",
+          headers: {
+            Authorization: "Bearer " + pat,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+          var txt = await r.text();
+          throw new Error("PUT " + path + " → " + r.status + ": " + txt.slice(0, 200));
+        }
+        return await r.json();
+      }
+
+      async function enqueueAction(action) {
+        var sites = selectedSites();
+        if (sites.length === 0) {
+          alert("行のチェックボックスで対象サイトを選択してください。");
+          return;
+        }
+        if (!confirm(
+          sites.length + " 件を「" +
+          (action === "install" ? "WPインストール" : "状態確認") +
+          "」キューに登録します。よろしいですか?"
+        )) return;
+
+        var current;
+        try { current = await ghGet(QUEUE_PATH); }
+        catch (e) { alert("キュー取得エラー: " + e.message); return; }
+
+        var queue;
+        try { queue = JSON.parse(current.content || '{"version":1,"items":[]}'); }
+        catch (e) { queue = { version: 1, items: [] }; }
+        if (!Array.isArray(queue.items)) queue.items = [];
+
+        var now = new Date().toISOString();
+        sites.forEach(function (s) {
+          queue.items.push({
+            action: action,
+            domain: s.domain,
+            requested_at: now,
+            id: s.id,
+          });
+        });
+
+        try {
+          await ghPut(
+            QUEUE_PATH,
+            JSON.stringify(queue, null, 2) + "\n",
+            "wp-runner: enqueue " + action + " for " + sites.length + " site(s)",
+            current.sha
+          );
+          alert(
+            "登録しました(" + sites.length + " 件)。\n" +
+            "Actionsタブの「WP runner」が走ります。完了したら「結果を取り込む」を押してください。"
+          );
+        } catch (e) {
+          alert("キュー書き込みエラー: " + e.message);
+        }
+      }
+
+      async function pullResults() {
+        var current;
+        try { current = await ghGet(RESULTS_PATH); }
+        catch (e) { alert("結果取得エラー: " + e.message); return; }
+        if (!current.content) { alert("結果ファイルがまだありません。"); return; }
+        var blob;
+        try { blob = JSON.parse(current.content); }
+        catch (e) { alert("結果ファイルが壊れています: " + e.message); return; }
+        var results = Array.isArray(blob.results) ? blob.results : [];
+        if (results.length === 0) { alert("結果がありません。"); return; }
+
+        var applied = 0;
+        var fresh = state.sites.slice(); // copy
+        results.forEach(function (r) {
+          var idx = fresh.findIndex(function (s) {
+            return (s.domain || "").toLowerCase() === (r.domain || "").toLowerCase();
+          });
+          if (idx < 0) return;
+          var s = fresh[idx];
+          var memoLines = (s.memo || "").split(/\n/).filter(Boolean);
+          if (r.action === "install" && r.ok) {
+            if (r.login_url) s.wpLoginUrl = r.login_url;
+            if (r.edit_url)  s.wpEditUrl  = r.edit_url;
+            if (r.admin_user || r.admin_password) {
+              memoLines.push("[install] user=" + (r.admin_user || "") +
+                " pass=" + (r.admin_password || ""));
+            }
+            s.status = "投稿済み";
+          } else if (r.action === "check_status") {
+            if (r.suggested_edit_url) s.wpEditUrl = r.suggested_edit_url;
+            if (r.wp_detected) {
+              if (s.status === "未対応") s.status = "投稿済み";
+              memoLines.push("[check] WP検出 / home=" + (r.homepage_status || "-") +
+                " / page_id=" + (r.front_page_id == null ? "-" : r.front_page_id));
+            } else {
+              memoLines.push("[check] WP未検出 / home=" + (r.homepage_status || "-"));
+            }
+          } else if (r.error) {
+            memoLines.push("[error] " + r.error);
+          }
+          s.memo = memoLines.slice(-3).join("\n");  // keep last 3 lines
+          s.updatedAt = new Date().toISOString();
+          fresh[idx] = s;
+          applied++;
+        });
+        state.sites = fresh;
+        saveState(); render();
+        alert(applied + " 件に結果を反映しました。");
+      }
+
+      function bindLv3() {
+        var qStatus = $("wpQueueStatus");
+        var qInstall = $("wpQueueInstall");
+        var pull = $("wpResultsPull");
+        if (qStatus)  qStatus.addEventListener("click",  function () { enqueueAction("check_status"); });
+        if (qInstall) qInstall.addEventListener("click", function () { enqueueAction("install"); });
+        if (pull)     pull.addEventListener("click",     pullResults);
+      }
+      bindLv3();
 
       init();
     })();
