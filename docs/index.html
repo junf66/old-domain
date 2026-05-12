@@ -343,6 +343,7 @@
       display: grid;
       grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
       gap: 20px;
+      align-items: stretch;
     }
     @media (max-width: 1100px) {
       .wp-layout { grid-template-columns: 1fr; }
@@ -351,6 +352,17 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
+      min-height: 0;
+    }
+    .wp-right { height: 100%; }
+    .wp-right > .wp-section-title:first-of-type ~ #wpArticleBody,
+    .wp-right #wpArticleBody {
+      flex: 1 1 auto;
+    }
+    .wp-right .wp-textarea-small,
+    .wp-right #wpSharedMemo {
+      flex: 0 0 auto;
+      min-height: 140px;
     }
 
     .wp-toolbar {
@@ -874,15 +886,15 @@
                   </label>
                 </div>
               </details>
+              <label>サイト名(全件に適用)
+                <input type="text" id="wpAddSiteTitle" placeholder="">
+              </label>
               <label>ステータス(全件に適用)
                 <select id="wpAddStatus">
                   <option>未対応</option>
                   <option>投稿済み</option>
                   <option>公開済み</option>
                 </select>
-              </label>
-              <label>サイト名(全件に適用)
-                <input type="text" id="wpAddSiteTitle" placeholder="">
               </label>
               <div class="wp-form-actions">
                 <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">サーバー登録&WPインストール</button>
