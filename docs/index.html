@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="googlebot" content="noindex, nofollow">
-  <title>中古ドメイン精査ツール</title>
+  <title>中古種蒔き</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
   <!-- DataTables + jQuery via CDN -->
@@ -643,7 +643,7 @@
 <body>
   <header class="top-bar">
     <div class="top-text">
-      <h1>中古ドメイン精査ツール</h1>
+      <h1>中古種蒔き</h1>
       <p>CSVアップで自動解析</p>
     </div>
     <section id="uploader">
@@ -659,7 +659,7 @@
   </header>
 
   <nav class="mode-tabs" role="tablist">
-    <button type="button" class="mode-tab" data-mode="audit" role="tab">🔍 中古ドメイン精査</button>
+    <button type="button" class="mode-tab" data-mode="audit" role="tab">🔍 中古種蒔き</button>
     <button type="button" class="mode-tab" data-mode="wp" role="tab">📝 WordPress投稿</button>
   </nav>
 
@@ -1546,7 +1546,7 @@
     })();
 
     // ================================================================
-    //  Mode switching (中古ドメイン精査 / WordPress投稿)
+    //  Mode switching (中古種蒔き / WordPress投稿)
     // ================================================================
     (function () {
       var MODE_KEY = "olddomain.mode";
@@ -2255,7 +2255,7 @@
       async function ghPut(path, content, message, sha) {
         var url = "https://api.github.com/repos/" + REPO + "/contents/" + path;
         var pat = getPat();
-        if (!pat) throw new Error("GitHubトークンが未設定です。中古ドメイン精査タブのアップロード機能から先にトークンを登録してください。");
+        if (!pat) throw new Error("GitHubトークンが未設定です。中古種蒔きタブのアップロード機能から先にトークンを登録してください。");
         var b64 = btoa(unescape(encodeURIComponent(content)));
         var body = { message: message, content: b64 };
         if (sha) body.sha = sha;
