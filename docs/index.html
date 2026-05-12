@@ -381,6 +381,11 @@
       font-weight: 600;
       padding: 4px 0;
     }
+    .wp-card-static .wp-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 0;
+    }
     .wp-form {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -760,37 +765,35 @@
             <button type="button" id="wpOpenEdits" class="wp-btn wp-btn-primary">✏️ 編集URL全部開く</button>
           </div>
 
-          <details class="wp-card" id="wpAddCard">
-            <summary>➕ サイトを追加</summary>
+          <div class="wp-card wp-card-static">
+            <div class="wp-card-title">➕ サイトを追加(複数可:1行1ドメイン)</div>
             <div class="wp-form">
-              <label>ドメイン <input type="text" id="wpAddDomain" placeholder="example.com"></label>
-              <label>ログインURL <input type="text" id="wpAddLogin" placeholder="https://example.com/wp-admin/"></label>
-              <label>固定ページ編集URL <input type="text" id="wpAddEdit" placeholder="https://example.com/wp-admin/post.php?post=2&amp;action=edit"></label>
-              <label>ステータス
+              <label class="wp-form-wide">ドメイン
+                <textarea id="wpAddDomain" rows="4" placeholder="example.com&#10;example.net&#10;…一行に1ドメイン" class="wp-textarea wp-textarea-small"></textarea>
+              </label>
+              <label>ログインURLパターン
+                <input type="text" id="wpLoginPattern" placeholder="https://{domain}/wp-admin/">
+              </label>
+              <label>編集URLパターン
+                <input type="text" id="wpEditPattern" placeholder="https://{domain}/wp-admin/post.php?post=2&amp;action=edit">
+              </label>
+              <label>ステータス(全件に適用)
                 <select id="wpAddStatus">
                   <option>未対応</option>
                   <option>投稿済み</option>
                   <option>公開済み</option>
                 </select>
               </label>
-              <label class="wp-form-wide">メモ <input type="text" id="wpAddMemo" placeholder=""></label>
+              <label>メモ(全件に適用)
+                <input type="text" id="wpAddMemo" placeholder="">
+              </label>
               <div class="wp-form-actions">
                 <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加</button>
                 <button type="button" id="wpAddCancel" class="wp-btn">クリア</button>
+                <span class="wp-form-note">パターンの <code>{domain}</code> がドメインに置換されます。</span>
               </div>
             </div>
-          </details>
-
-          <details class="wp-card">
-            <summary>📂 CSV インポート(ヘッダ: domain,wpLoginUrl,wpEditUrl,status,memo)</summary>
-            <div class="wp-form">
-              <input type="file" id="wpCsvFile" accept=".csv" class="wp-input">
-              <div class="wp-form-actions">
-                <button type="button" id="wpCsvImport" class="wp-btn wp-btn-primary">取り込む</button>
-                <span class="wp-form-note">既存ドメインは更新、新規は追加されます。</span>
-              </div>
-            </div>
-          </details>
+          </div>
 
           <div class="wp-table-wrap">
             <table id="wpSitesTable" class="wp-table">
@@ -1507,6 +1510,8 @@
         statusFilter: "all",
         sortAsc: true,
         articleMono: false,
+        loginPattern: "https://{domain}/wp-admin/",
+        editPattern: "https://{domain}/wp-admin/post.php?post=2&action=edit",
       };
 
       function loadState() {
@@ -1702,75 +1707,6 @@
         selected.delete(id);
       }
 
-      // ---- CSV ----
-      function parseCsv(text) {
-        // Minimal CSV parser supporting quoted fields and embedded commas/newlines.
-        var rows = [];
-        var row = [];
-        var cur = "";
-        var inQuote = false;
-        for (var i = 0; i < text.length; i++) {
-          var c = text[i];
-          if (inQuote) {
-            if (c === '"') {
-              if (text[i + 1] === '"') { cur += '"'; i++; }
-              else { inQuote = false; }
-            } else { cur += c; }
-          } else {
-            if (c === '"') inQuote = true;
-            else if (c === ",") { row.push(cur); cur = ""; }
-            else if (c === "\n" || c === "\r") {
-              if (c === "\r" && text[i + 1] === "\n") i++;
-              row.push(cur); cur = "";
-              if (row.length > 1 || row[0] !== "") rows.push(row);
-              row = [];
-            } else { cur += c; }
-          }
-        }
-        if (cur !== "" || row.length > 0) { row.push(cur); rows.push(row); }
-        return rows;
-      }
-
-      function importCsvFile(file) {
-        var r = new FileReader();
-        r.onload = function () {
-          var rows = parseCsv(String(r.result || ""));
-          if (rows.length === 0) { alert("CSVが空です。"); return; }
-          var header = rows[0].map(function (h) { return String(h).trim(); });
-          var idx = {
-            domain: header.indexOf("domain"),
-            wpLoginUrl: header.indexOf("wpLoginUrl"),
-            wpEditUrl: header.indexOf("wpEditUrl"),
-            status: header.indexOf("status"),
-            memo: header.indexOf("memo"),
-          };
-          if (idx.domain < 0) {
-            alert("ヘッダに 'domain' 列が見つかりません。\n想定: domain,wpLoginUrl,wpEditUrl,status,memo");
-            return;
-          }
-          var added = 0, updated = 0;
-          for (var i = 1; i < rows.length; i++) {
-            var row = rows[i];
-            var d = (row[idx.domain] || "").trim();
-            if (!d) continue;
-            var before = state.sites.find(function (s) {
-              return (s.domain || "").toLowerCase() === d.toLowerCase();
-            });
-            addSite({
-              domain: d,
-              wpLoginUrl: idx.wpLoginUrl >= 0 ? row[idx.wpLoginUrl] : "",
-              wpEditUrl:  idx.wpEditUrl  >= 0 ? row[idx.wpEditUrl]  : "",
-              status:     idx.status     >= 0 ? row[idx.status]     : "未対応",
-              memo:       idx.memo       >= 0 ? row[idx.memo]       : "",
-            });
-            if (before) updated++; else added++;
-          }
-          saveState(); render();
-          alert("取り込み完了:新規 " + added + " 件 / 更新 " + updated + " 件");
-        };
-        r.readAsText(file);
-      }
-
       // ---- JSON I/O ----
       function exportJson() {
         var payload = {
@@ -1876,36 +1812,62 @@
           saveState(); renderTable();
         });
 
-        // Add form
-        $("wpAddSubmit").addEventListener("click", function () {
-          var data = {
-            domain:     $("wpAddDomain").value,
-            wpLoginUrl: $("wpAddLogin").value,
-            wpEditUrl:  $("wpAddEdit").value,
-            status:     $("wpAddStatus").value,
-            memo:       $("wpAddMemo").value,
-          };
-          var s = addSite(data);
-          if (s) {
-            ["wpAddDomain", "wpAddLogin", "wpAddEdit", "wpAddMemo"].forEach(function (i) {
-              $(i).value = "";
-            });
-            $("wpAddStatus").value = "未対応";
-            saveState(); render();
-          }
+        // URL pattern persistence
+        var loginPatternEl = $("wpLoginPattern");
+        var editPatternEl = $("wpEditPattern");
+        loginPatternEl.value = state.loginPattern || defaultState.loginPattern;
+        editPatternEl.value = state.editPattern  || defaultState.editPattern;
+        loginPatternEl.addEventListener("input", function () {
+          state.loginPattern = loginPatternEl.value || defaultState.loginPattern;
+          saveState();
         });
-        $("wpAddCancel").addEventListener("click", function () {
-          ["wpAddDomain", "wpAddLogin", "wpAddEdit", "wpAddMemo"].forEach(function (i) {
-            $(i).value = "";
-          });
-          $("wpAddStatus").value = "未対応";
+        editPatternEl.addEventListener("input", function () {
+          state.editPattern = editPatternEl.value || defaultState.editPattern;
+          saveState();
         });
 
-        // CSV
-        $("wpCsvImport").addEventListener("click", function () {
-          var f = $("wpCsvFile").files && $("wpCsvFile").files[0];
-          if (!f) { alert("CSVファイルを選んでください。"); return; }
-          importCsvFile(f);
+        function applyPattern(pattern, domain) {
+          return String(pattern || "").replace(/\{domain\}/g, domain);
+        }
+
+        // Add form (multi-domain input)
+        $("wpAddSubmit").addEventListener("click", function () {
+          var raw = $("wpAddDomain").value || "";
+          var domains = raw.split(/[\r\n,]+/)
+            .map(function (d) { return d.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); })
+            .filter(function (d) { return d.length > 0; });
+          if (domains.length === 0) {
+            alert("ドメインを1つ以上入力してください。");
+            return;
+          }
+          var loginP = loginPatternEl.value || defaultState.loginPattern;
+          var editP  = editPatternEl.value  || defaultState.editPattern;
+          var status = $("wpAddStatus").value;
+          var memo   = $("wpAddMemo").value;
+          var added = 0, updated = 0;
+          domains.forEach(function (d) {
+            var before = state.sites.find(function (s) {
+              return (s.domain || "").toLowerCase() === d.toLowerCase();
+            });
+            addSite({
+              domain: d,
+              wpLoginUrl: applyPattern(loginP, d),
+              wpEditUrl:  applyPattern(editP, d),
+              status: status,
+              memo: memo,
+            });
+            if (before) updated++; else added++;
+          });
+          $("wpAddDomain").value = "";
+          $("wpAddMemo").value = "";
+          $("wpAddStatus").value = "未対応";
+          saveState(); render();
+          flash($("wpAddSubmit"), "✓ 新規 " + added + " / 更新 " + updated);
+        });
+        $("wpAddCancel").addEventListener("click", function () {
+          $("wpAddDomain").value = "";
+          $("wpAddMemo").value = "";
+          $("wpAddStatus").value = "未対応";
         });
 
         // JSON
