@@ -763,10 +763,12 @@
           </div>
 
           <div class="wp-toolbar">
-            <button type="button" id="wpQueueStatus" class="wp-btn">🔍 状態確認をキュー登録</button>
-            <button type="button" id="wpQueueInstall" class="wp-btn wp-btn-primary">🚀 WPインストールをキュー登録</button>
-            <button type="button" id="wpResultsPull" class="wp-btn">📥 結果を取り込む</button>
-            <span class="wp-form-note">XServer CLI/MCP 連携(対象:選択中の行)</span>
+            <button type="button" id="wpQueueInstall" class="wp-btn wp-btn-primary"
+              title="選択中のドメインを XServer に WordPress 自動インストール依頼。Claude(XServer MCP)が処理し、結果は『最新を取り込む』で反映されます。">🚀 WPインストール</button>
+            <button type="button" id="wpQueueStatus" class="wp-btn"
+              title="選択中のドメインで WordPress が動いているか確認し、固定ページの編集URLを自動更新します。XServer不要、GitHub Actions が実行。">🔍 状態チェック</button>
+            <button type="button" id="wpResultsPull" class="wp-btn"
+              title="WPインストール依頼や状態チェックの結果を、この画面のサイト一覧に反映します。">📥 最新を取り込む</button>
           </div>
 
           <div class="wp-card wp-card-static">
