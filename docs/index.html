@@ -811,7 +811,8 @@
                 <input type="text" id="wpAddMemo" placeholder="">
               </label>
               <div class="wp-form-actions">
-                <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加</button>
+                <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加 + サーバー登録依頼</button>
+                <button type="button" id="wpAddOnly" class="wp-btn">リストのみ追加</button>
                 <button type="button" id="wpAddCancel" class="wp-btn">クリア</button>
                 <span class="wp-form-note">パターンの <code>{domain}</code> がドメインに置換されます。</span>
               </div>
@@ -1804,7 +1805,7 @@
         }
 
         // Add form (multi-domain input)
-        $("wpAddSubmit").addEventListener("click", function () {
+        async function performAdd(alsoEnqueueInstall) {
           var raw = $("wpAddDomain").value || "";
           var domains = raw.split(/[\r\n,]+/)
             .map(function (d) { return d.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); })
@@ -1818,25 +1819,69 @@
           var status = $("wpAddStatus").value;
           var memo   = $("wpAddMemo").value;
           var added = 0, updated = 0;
+          var addedSites = [];
           domains.forEach(function (d) {
             var before = state.sites.find(function (s) {
               return (s.domain || "").toLowerCase() === d.toLowerCase();
             });
-            addSite({
+            var s = addSite({
               domain: d,
               wpLoginUrl: applyPattern(loginP, d),
               wpEditUrl:  applyPattern(editP, d),
               status: status,
               memo: memo,
             });
+            if (s) addedSites.push(s);
             if (before) updated++; else added++;
           });
           $("wpAddDomain").value = "";
           $("wpAddMemo").value = "";
           $("wpAddStatus").value = "未対応";
           saveState(); render();
-          flash($("wpAddSubmit"), "✓ 新規 " + added + " / 更新 " + updated);
-        });
+
+          if (alsoEnqueueInstall && addedSites.length > 0) {
+            var btn = $("wpAddSubmit");
+            var orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "🚀 キュー登録中…";
+            try {
+              var current = await ghGet(QUEUE_PATH);
+              var queue;
+              try { queue = JSON.parse(current.content || '{"version":1,"items":[]}'); }
+              catch (e) { queue = { version: 1, items: [] }; }
+              if (!Array.isArray(queue.items)) queue.items = [];
+              var now = new Date().toISOString();
+              addedSites.forEach(function (s) {
+                queue.items.push({
+                  action: "install",
+                  domain: s.domain,
+                  requested_at: now,
+                  id: s.id,
+                });
+              });
+              await ghPut(
+                QUEUE_PATH,
+                JSON.stringify(queue, null, 2) + "\n",
+                "wp-runner: enqueue install (from add) for " + addedSites.length + " site(s)",
+                current.sha
+              );
+              showInstallPrompt(addedSites);
+            } catch (e) {
+              alert(
+                "リストには追加しましたが、サーバー登録依頼の書き込みに失敗しました:\n" +
+                e.message + "\n\n" +
+                "後で「🚀 WPインストール」ボタンから再試行できます。"
+              );
+            } finally {
+              btn.disabled = false;
+              btn.textContent = orig;
+            }
+          } else {
+            flash($("wpAddSubmit"), "✓ 新規 " + added + " / 更新 " + updated);
+          }
+        }
+        $("wpAddSubmit").addEventListener("click", function () { performAdd(true); });
+        $("wpAddOnly").addEventListener("click",  function () { performAdd(false); });
         $("wpAddCancel").addEventListener("click", function () {
           $("wpAddDomain").value = "";
           $("wpAddMemo").value = "";
