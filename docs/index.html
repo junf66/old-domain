@@ -835,8 +835,11 @@
               <input type="checkbox" id="wpArticleMono">
               <span>等幅</span>
             </label>
+            <button type="button" id="wpArticleRewrite" class="wp-btn wp-btn-primary">🔄 リライト</button>
+            <button type="button" id="wpArticleRevert" class="wp-btn" hidden>↶ 元に戻す</button>
             <button type="button" id="wpArticleCopy" class="wp-btn">📋 コピー</button>
             <button type="button" id="wpArticleClear" class="wp-btn">🗑 クリア</button>
+            <button type="button" id="wpArticleSettings" class="wp-btn" title="リライト設定">⚙</button>
           </div>
           <textarea id="wpArticleBody" class="wp-textarea" rows="18"
             placeholder="ペラサイト用の記事本文をここに貼り付け / 編集します。コピーボタンでクリップボードへ。"></textarea>
@@ -1913,6 +1916,146 @@
           article.classList.toggle("mono", articleMono.checked);
           saveState();
         });
+
+        // ---- Rewrite (Anthropic API, BYOK) ----
+        var LLM_KEY = "olddomain.llm.anthropic.key";
+        var LLM_MODEL_KEY = "olddomain.llm.model";
+        function getLlmKey()   { return localStorage.getItem(LLM_KEY) || ""; }
+        function setLlmKey(k)  { localStorage.setItem(LLM_KEY, k); }
+        function dropLlmKey()  { localStorage.removeItem(LLM_KEY); }
+        function getLlmModel() { return localStorage.getItem(LLM_MODEL_KEY) || "claude-sonnet-4-6"; }
+        function setLlmModel(m){ localStorage.setItem(LLM_MODEL_KEY, m); }
+
+        var rewriteBtn = $("wpArticleRewrite");
+        var revertBtn  = $("wpArticleRevert");
+        var settingsBtn = $("wpArticleSettings");
+
+        function syncRevertVisibility() {
+          revertBtn.hidden = !state.articleBodyPrev;
+        }
+        syncRevertVisibility();
+
+        async function rewriteArticle() {
+          var current = article.value || "";
+          if (current.trim().length < 10) {
+            alert("リライトする本文がほぼ空です。"); return;
+          }
+          var key = getLlmKey();
+          if (!key) {
+            key = prompt(
+              "Anthropic API キー(sk-ant-...)を入力してください。\n" +
+              "このブラウザの localStorage のみに保存されます。\n" +
+              "発行: https://console.anthropic.com/settings/keys"
+            );
+            if (!key) return;
+            key = key.trim();
+            setLlmKey(key);
+          }
+
+          var orig = rewriteBtn.textContent;
+          rewriteBtn.disabled = true;
+          rewriteBtn.textContent = "🔄 リライト中…";
+          try {
+            var body = {
+              model: getLlmModel(),
+              max_tokens: 4096,
+              messages: [{
+                role: "user",
+                content:
+                  "以下の記事を、テーマ・訴求ポイント・ターゲット読者・全体の構成は維持したまま、" +
+                  "言い回し・文の構造・例え話・語彙を変えてリライトしてください。\n" +
+                  "ルール:\n" +
+                  "- 文字数は元の ±20% 以内\n" +
+                  "- HTMLタグやMarkdown記法はそのまま保持\n" +
+                  "- 主張やファクトは絶対に変更しない\n" +
+                  "- 出力はリライト後の本文のみ(前置き・解説・コードフェンス不要)\n\n" +
+                  "---本文ここから---\n" + current + "\n---本文ここまで---"
+              }],
+            };
+            var resp = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "anthropic-dangerous-direct-browser-access": "true",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+            if (!resp.ok) {
+              var txt = await resp.text();
+              if (resp.status === 401) {
+                if (confirm("APIキーが無効です(401)。キーを削除して再入力しますか?")) {
+                  dropLlmKey();
+                }
+                return;
+              }
+              alert("リライト失敗 (" + resp.status + "): " + txt.slice(0, 400));
+              return;
+            }
+            var data = await resp.json();
+            var rewritten = (data.content || [])
+              .filter(function (c) { return c.type === "text"; })
+              .map(function (c) { return c.text; })
+              .join("\n").trim();
+            // Strip an accidental wrapping code-fence just in case.
+            rewritten = rewritten.replace(/^```[a-zA-Z]*\n?|```$/g, "").trim();
+            if (!rewritten) { alert("リライト結果が空でした。"); return; }
+
+            state.articleBodyPrev = current;
+            article.value = rewritten;
+            state.articleBody = rewritten;
+            saveState();
+            updateArticleCount();
+            syncRevertVisibility();
+            flash(rewriteBtn, "✓ 完了");
+          } catch (e) {
+            alert("通信エラー: " + e.message);
+          } finally {
+            rewriteBtn.disabled = false;
+            // Restore default label after flash() finishes; flash already handles it.
+            if (rewriteBtn.textContent === "🔄 リライト中…") rewriteBtn.textContent = orig;
+          }
+        }
+
+        function revertArticle() {
+          if (!state.articleBodyPrev) return;
+          var prev = state.articleBodyPrev;
+          state.articleBodyPrev = article.value || "";  // swap so revert is reversible
+          article.value = prev;
+          state.articleBody = prev;
+          saveState();
+          updateArticleCount();
+          syncRevertVisibility();
+        }
+
+        function openLlmSettings() {
+          var hasKey = !!getLlmKey();
+          var model  = getLlmModel();
+          var pick = prompt(
+            "リライト設定:\n" +
+            "  現在のキー: " + (hasKey ? "保存済み" : "未設定") + "\n" +
+            "  現在のモデル: " + model + "\n\n" +
+            "操作を選んでください(数字を入力):\n" +
+            "  1: APIキーを入力 / 上書き\n" +
+            "  2: APIキーを削除\n" +
+            "  3: モデルを変更(例: claude-sonnet-4-6 / claude-haiku-4-5-20251001 / claude-opus-4-7)\n" +
+            "  4: キャンセル"
+          );
+          if (pick === "1") {
+            var k = prompt("Anthropic API キーを入力(sk-ant-...)");
+            if (k) setLlmKey(k.trim());
+          } else if (pick === "2") {
+            dropLlmKey(); alert("キーを削除しました。");
+          } else if (pick === "3") {
+            var m = prompt("モデルIDを入力", model);
+            if (m) setLlmModel(m.trim());
+          }
+        }
+
+        rewriteBtn.addEventListener("click", rewriteArticle);
+        revertBtn.addEventListener("click", revertArticle);
+        settingsBtn.addEventListener("click", openLlmSettings);
 
         // Shared memo
         sharedMemo.addEventListener("input", function () {
