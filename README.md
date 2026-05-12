@@ -160,6 +160,60 @@ python -m http.server 8000 -d docs
 - スナップショット履歴から初回日/総数/日本語URL履歴を判定
 - ドメイン間に 0.5 秒スリープ(マナー)
 
+## WordPress 投稿モード(Lv3 / XServer MCP 連携)
+
+ダッシュボード右上の「WordPress投稿」タブから利用できます。
+インストール処理は **XServer MCP Server** を経由する想定で、アプリ側には
+MCP の呼び出しコードは入っていません(疎結合維持)。
+
+### キュー / 結果のフォーマット
+
+- `data/wp-install-queue.json` — 処理待ち
+- `data/wp-install-results.json` — 処理結果
+
+スキーマは `scripts/wp_runner.py` 冒頭のコメントを参照。
+
+### `check_status`(WP検出・page_id 自動取得)
+
+XServer不要。GitHub Actions の `WP runner (status-check)` ワークフローが
+キューを消化し、結果を `data/wp-install-results.json` にコミットします。
+
+1. ダッシュボードで対象サイトの行をチェック
+2. **🔍 状態確認をキュー登録** をクリック
+3. Actions タブで `WP runner (status-check)` が完了するのを待つ
+4. ダッシュボードで **📥 結果を取り込む** → 編集URL / ステータス / メモが更新
+
+### `install`(WordPress 構築)
+
+GitHub Actions では処理せず、**Claude + XServer MCP Server** に処理させます。
+
+事前準備:
+- Claude Desktop(または互換クライアント)で **XServer MCP Server** を有効化
+- 同じクライアントで **GitHub MCP Server** も使えるようにする(リポジトリ読み書き用)
+
+手順:
+1. ダッシュボードで対象サイトの行をチェック
+2. **🚀 WPインストールをキュー登録** をクリック
+3. リポジトリ `data/wp-install-queue.json` に `action: install` 行が追加される
+4. Claude にこう頼む:
+   > `junf66/old-domain` の `data/wp-install-queue.json` を読んで、
+   > 各 `action: install` アイテムを XServer MCP で処理し、
+   > 結果を `data/wp-install-results.json` に追記(同じスキーマ)、
+   > 処理済みアイテムをキューから削除して。
+5. Claude が XServer MCP の「ドメイン追加 → SSL → WP インストール」を実行
+6. ダッシュボードで **📥 結果を取り込む**
+
+`results.json` には少なくとも `domain` / `ok` / `login_url` / `edit_url` /
+`admin_user` / `admin_password` / `front_page_id` を含むようにすると
+ダッシュボードのインポートで自動反映されます。
+
+### MCP を使わずに手元で完結させたい場合
+
+`scripts/wp_runner.py` の `check_status` 部分はそのまま使えます。
+インストール側を手元で動かすなら、同スクリプトを拡張して
+お使いの XServer 操作手段(例:RPC、SDK、または `xserver-cli` 等)を
+呼び出すように `install` の分岐を追加してください。
+
 ## ライセンス
 
 社内利用を想定した未公開スクリプトです。再配布等は元オーナーに確認してください。
