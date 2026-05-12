@@ -840,8 +840,8 @@
                   <option>公開済み</option>
                 </select>
               </label>
-              <label>メモ(全件に適用)
-                <input type="text" id="wpAddMemo" placeholder="">
+              <label>サイト名(全件に適用、行単位の <code>| サイト名</code> があればそちらを優先)
+                <input type="text" id="wpAddSiteTitle" placeholder="">
               </label>
               <div class="wp-form-actions">
                 <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加 + サーバー登録依頼</button>
@@ -1896,7 +1896,7 @@
           var loginP = loginPatternEl.value || defaultState.loginPattern;
           var editP  = editPatternEl.value  || defaultState.editPattern;
           var status = $("wpAddStatus").value;
-          var memo   = $("wpAddMemo").value;
+          var globalTitle = ($("wpAddSiteTitle").value || "").trim();
           var added = 0, updated = 0;
           var addedSites = [];
           rows.forEach(function (r) {
@@ -1906,17 +1906,16 @@
             });
             var s = addSite({
               domain: d,
-              siteTitle: r.siteTitle,
+              siteTitle: r.siteTitle || globalTitle,
               wpLoginUrl: applyPattern(loginP, d),
               wpEditUrl:  applyPattern(editP, d),
               status: status,
-              memo: memo,
             });
             if (s) addedSites.push(s);
             if (before) updated++; else added++;
           });
           $("wpAddDomain").value = "";
-          $("wpAddMemo").value = "";
+          $("wpAddSiteTitle").value = "";
           $("wpAddStatus").value = "未対応";
           saveState(); render();
 
@@ -1965,7 +1964,7 @@
         $("wpAddOnly").addEventListener("click",  function () { performAdd(false); });
         $("wpAddCancel").addEventListener("click", function () {
           $("wpAddDomain").value = "";
-          $("wpAddMemo").value = "";
+          $("wpAddSiteTitle").value = "";
           $("wpAddStatus").value = "未対応";
         });
 
