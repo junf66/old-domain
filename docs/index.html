@@ -290,7 +290,10 @@
       border-bottom-color: #1a66d0;
     }
     .mode-panel[hidden] { display: none; }
-    .mode-panel { min-height: calc(100vh - 200px); }
+    .mode-panel {
+      min-height: calc(100vh - 120px);
+      scroll-margin-top: 0;
+    }
 
     /* ===== WordPress mode ===== */
     .wp-summary {
@@ -820,7 +823,7 @@
             <div class="wp-card-title"><span class="wp-step">①</span> サイトを追加 + サーバー登録</div>
             <div class="wp-form">
               <label class="wp-form-wide">ドメイン(1行1ドメイン)
-                <textarea id="wpAddDomain" rows="4" placeholder="example.com&#10;example.net&#10;…" class="wp-textarea wp-textarea-small"></textarea>
+                <textarea id="wpAddDomain" rows="4" placeholder="" class="wp-textarea wp-textarea-small"></textarea>
               </label>
               <details class="wp-form-wide wp-patterns">
                 <summary>URLパターンを編集する</summary>
@@ -1554,7 +1557,7 @@
       var panels = document.querySelectorAll(".mode-panel");
       var dropzoneSection = document.getElementById("uploader");
 
-      function setMode(mode) {
+      function setMode(mode, opts) {
         if (mode !== "audit" && mode !== "wp") mode = "audit";
         tabs.forEach(function (t) {
           t.classList.toggle("active", t.getAttribute("data-mode") === mode);
@@ -1567,6 +1570,9 @@
           dropzoneSection.style.display = (mode === "audit") ? "" : "none";
         }
         try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
+        if (opts && opts.scrollTop !== false) {
+          window.scrollTo({ top: 0, behavior: "instant" });
+        }
       }
 
       tabs.forEach(function (t) {
