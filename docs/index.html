@@ -819,8 +819,8 @@
           <div class="wp-card wp-card-static">
             <div class="wp-card-title"><span class="wp-step">①</span> サイトを追加 + サーバー登録</div>
             <div class="wp-form">
-              <label class="wp-form-wide">ドメイン(1行1ドメイン、任意で「| サイト名」)
-                <textarea id="wpAddDomain" rows="4" placeholder="example.com | サンプルサイト&#10;example.net&#10;…" class="wp-textarea wp-textarea-small"></textarea>
+              <label class="wp-form-wide">ドメイン(1行1ドメイン)
+                <textarea id="wpAddDomain" rows="4" placeholder="example.com&#10;example.net&#10;…" class="wp-textarea wp-textarea-small"></textarea>
               </label>
               <details class="wp-form-wide wp-patterns">
                 <summary>URLパターンを編集する</summary>
@@ -840,11 +840,11 @@
                   <option>公開済み</option>
                 </select>
               </label>
-              <label>サイト名(全件に適用、行単位の <code>| サイト名</code> があればそちらを優先)
+              <label>サイト名(全件に適用)
                 <input type="text" id="wpAddSiteTitle" placeholder="">
               </label>
               <div class="wp-form-actions">
-                <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">追加 + サーバー登録依頼</button>
+                <button type="button" id="wpAddSubmit" class="wp-btn wp-btn-primary">サーバー登録&WPインストール</button>
                 <button type="button" id="wpAddOnly" class="wp-btn">リストのみ追加</button>
                 <button type="button" id="wpAddCancel" class="wp-btn">クリア</button>
               </div>
@@ -1877,19 +1877,12 @@
         // Add form (multi-domain input)
         async function performAdd(alsoEnqueueInstall) {
           var raw = $("wpAddDomain").value || "";
-          // Each line is either "domain" or "domain | site title".
-          var rows = raw.split(/[\r\n]+/)
-            .map(function (line) {
-              var parts = line.split("|");
-              var d = (parts[0] || "")
-                .trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-              var t = parts.length > 1
-                ? parts.slice(1).join("|").trim()
-                : "";
-              return { domain: d, siteTitle: t };
+          var domains = raw.split(/[\r\n,]+/)
+            .map(function (d) {
+              return d.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
             })
-            .filter(function (r) { return r.domain.length > 0; });
-          if (rows.length === 0) {
+            .filter(function (d) { return d.length > 0; });
+          if (domains.length === 0) {
             alert("ドメインを1つ以上入力してください。");
             return;
           }
@@ -1899,14 +1892,13 @@
           var globalTitle = ($("wpAddSiteTitle").value || "").trim();
           var added = 0, updated = 0;
           var addedSites = [];
-          rows.forEach(function (r) {
-            var d = r.domain;
+          domains.forEach(function (d) {
             var before = state.sites.find(function (s) {
               return (s.domain || "").toLowerCase() === d.toLowerCase();
             });
             var s = addSite({
               domain: d,
-              siteTitle: r.siteTitle || globalTitle,
+              siteTitle: globalTitle,
               wpLoginUrl: applyPattern(loginP, d),
               wpEditUrl:  applyPattern(editP, d),
               status: status,
@@ -2338,8 +2330,8 @@
 
       function buildInstallPrompt(sites) {
         var lines = sites.map(function (s) {
-          var title = s.siteTitle || s.domain;
-          return "- " + s.domain + "  (サイト名: " + title + ")";
+          var t = (s.siteTitle || "").trim();
+          return "- " + s.domain + (t ? "  (サイト名: " + t + ")" : "");
         }).join("\n");
         return [
           "以下を XServer MCP で実行してください。",
