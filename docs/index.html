@@ -540,6 +540,26 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .wp-textarea-small { min-height: 120px; }
+    .wp-patterns > summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+    .wp-patterns[open] > summary { color: #1a1a22; }
+    .wp-patterns-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      margin-top: 6px;
+    }
+    .wp-patterns-body label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
 
     /* Column-header tooltip "?" */
     .tip {
@@ -794,12 +814,17 @@
               <label class="wp-form-wide">ドメイン
                 <textarea id="wpAddDomain" rows="4" placeholder="example.com&#10;example.net&#10;…一行に1ドメイン" class="wp-textarea wp-textarea-small"></textarea>
               </label>
-              <label>ログインURLパターン
-                <input type="text" id="wpLoginPattern" placeholder="https://{domain}/wp-admin/">
-              </label>
-              <label>編集URLパターン
-                <input type="text" id="wpEditPattern" placeholder="https://{domain}/wp-admin/post.php?post=2&amp;action=edit">
-              </label>
+              <details class="wp-form-wide wp-patterns">
+                <summary>URLパターンを編集する</summary>
+                <div class="wp-patterns-body">
+                  <label>ログインURLパターン
+                    <input type="text" id="wpLoginPattern" placeholder="https://{domain}/wp-admin/">
+                  </label>
+                  <label>編集URLパターン
+                    <input type="text" id="wpEditPattern" placeholder="https://{domain}/wp-admin/post.php?post=2&amp;action=edit">
+                  </label>
+                </div>
+              </details>
               <label>ステータス(全件に適用)
                 <select id="wpAddStatus">
                   <option>未対応</option>
