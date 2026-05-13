@@ -3,6 +3,11 @@ name: Analyze domains
 on:
   # Manual trigger: "Run workflow" button in the Actions tab.
   workflow_dispatch:
+    inputs:
+      limit:
+        description: "Process only the first N domains (debug). Leave 0 for full run."
+        required: false
+        default: "0"
   # Auto-run whenever a CSV is added or updated under data/input/.
   push:
     paths:
@@ -35,7 +40,13 @@ jobs:
       - name: Run analyze.py
         env:
           AHREFS_API_KEY: ${{ secrets.AHREFS_API_KEY }}
-        run: python scripts/analyze.py
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+            python scripts/analyze.py --limit "$LIMIT"
+          else
+            python scripts/analyze.py
+          fi
 
       - name: Commit updated docs/data.json
         run: |

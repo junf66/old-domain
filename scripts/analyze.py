@@ -605,6 +605,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Merge every CSV under data/input/ instead of only the newest.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Only process the first N domains (useful for debug runs).",
+    )
     args = parser.parse_args(argv)
 
     if args.input is not None:
@@ -626,6 +632,9 @@ def main(argv: list[str] | None = None) -> int:
     if not domains:
         print("CSV contains no domains.")
         return 1
+    if args.limit and args.limit > 0:
+        domains = domains[: args.limit]
+        print(f"[input] --limit {args.limit} applied")
     print(f"[input] total unique: {len(domains)} domain(s)")
 
     rows = analyze(domains, dry_run=args.dry_run)
