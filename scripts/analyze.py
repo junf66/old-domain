@@ -375,10 +375,29 @@ def _batch_row_for(domain: str, batch: list[dict]) -> dict:
 
 
 def _count_tld(refdoms: list[dict], suffix: str) -> int:
-    """Count referring domains whose host ends with `suffix` (case-insensitive)."""
+    """Count referring domains whose host ends with `suffix` (case-insensitive).
+
+    Tries several possible response field names because Ahrefs' field
+    layout has shifted historically. Also strips scheme/path when the
+    API hands us a full URL instead of a bare hostname.
+    """
     n = 0
     for r in refdoms or []:
-        host = (r.get("domain") or r.get("hostname") or "").lower().rstrip(".")
+        host = ""
+        for k in ("domain", "refdomain", "hostname", "host", "url_from",
+                  "ref_domain", "domain_name"):
+            v = r.get(k) if isinstance(r, dict) else None
+            if v:
+                host = str(v).strip().lower()
+                break
+        if not host and isinstance(r, str):
+            host = r.lower().strip()
+        # Drop scheme and path if it's actually a URL.
+        for proto in ("https://", "http://"):
+            if host.startswith(proto):
+                host = host[len(proto):]
+                break
+        host = host.split("/", 1)[0].rstrip(".")
         if host.endswith(suffix):
             n += 1
     return n
@@ -454,6 +473,10 @@ def analyze(
             except Exception as exc:
                 print(f"  refdomains fetch failed: {exc}")
                 refdoms = []
+            if i == 1:
+                # One-shot debug so we can verify the actual response shape.
+                preview = refdoms[:3] if isinstance(refdoms, list) else refdoms
+                print(f"  [debug] refdomains sample for {domain}: {preview}")
             refdomains_gojp = _count_tld(refdoms, ".go.jp")
             refdomains_lgjp = _count_tld(refdoms, ".lg.jp")
             refdomains_acjp = _count_tld(refdoms, ".ac.jp")
