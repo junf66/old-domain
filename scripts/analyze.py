@@ -418,8 +418,35 @@ def analyze(
     domains: list[str],
     dry_run: bool = False,
     sleep_between: float = 0.5,
+    skip_existing: bool = True,
 ) -> list[dict]:
     rows: list[dict] = []
+
+    # ---- skip already-analysed domains so we don't burn credits again ----
+    existing_by_domain: dict[str, dict] = {}
+    if skip_existing and DOCS_DATA.exists():
+        try:
+            prior = json.loads(DOCS_DATA.read_text(encoding="utf-8"))
+            if isinstance(prior, list):
+                for r in prior:
+                    d = (r.get("domain") or "").lower().strip()
+                    if d:
+                        existing_by_domain[d] = r
+        except Exception:
+            existing_by_domain = {}
+
+    fresh_domains: list[str] = []
+    cached_count = 0
+    for d in domains:
+        if d.lower() in existing_by_domain:
+            cached_count += 1
+        else:
+            fresh_domains.append(d)
+    if cached_count:
+        print(
+            f"[cache] {cached_count} domain(s) already analysed — reusing existing scores"
+        )
+    domains_to_fetch = fresh_domains
 
     if dry_run:
         batch_rows: list[dict] = []
@@ -431,13 +458,21 @@ def analyze(
             print(f"[ahrefs] subscription info: {info}")
         except Exception as exc:
             print(f"[ahrefs] WARN could not fetch subscription info: {exc}")
-        print(f"[ahrefs] batch-analysis for {len(domains)} domains...")
-        batch_rows = client.batch_analysis(domains)
+        if domains_to_fetch:
+            print(f"[ahrefs] batch-analysis for {len(domains_to_fetch)} domains...")
+            batch_rows = client.batch_analysis(domains_to_fetch)
+        else:
+            batch_rows = []
 
     wayback_skip_after = 5  # consecutive failures before giving up on Wayback
     wayback_failures = 0
     wayback_disabled = False
     for i, domain in enumerate(domains, start=1):
+        cached = existing_by_domain.get(domain.lower())
+        if cached:
+            print(f"[{i}/{len(domains)}] {domain}  (cached)")
+            rows.append(cached)
+            continue
         print(f"[{i}/{len(domains)}] {domain}")
         if dry_run:
             dr = 42
@@ -469,7 +504,7 @@ def analyze(
             refips = int(_f(row, "refips"))
             refclass_c = int(_f(row, "refips_subnets", "refclass_c"))
             try:
-                refdoms = client.site_explorer_refdomains(domain, limit=1000)
+                refdoms = client.site_explorer_refdomains(domain, limit=100)
             except Exception as exc:
                 print(f"  refdomains fetch failed: {exc}")
                 refdoms = []
@@ -481,7 +516,7 @@ def analyze(
             refdomains_lgjp = _count_tld(refdoms, ".lg.jp")
             refdomains_acjp = _count_tld(refdoms, ".ac.jp")
             try:
-                anchors = client.site_explorer_anchors(domain, limit=20)
+                anchors = client.site_explorer_anchors(domain, limit=5)
             except Exception as exc:
                 print(f"  anchors fetch failed: {exc}")
                 anchors = []
@@ -611,6 +646,11 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="Only process the first N domains (useful for debug runs).",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-analyse every domain even if already in docs/data.json.",
+    )
     args = parser.parse_args(argv)
 
     if args.input is not None:
@@ -637,7 +677,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[input] --limit {args.limit} applied")
     print(f"[input] total unique: {len(domains)} domain(s)")
 
-    rows = analyze(domains, dry_run=args.dry_run)
+    rows = analyze(
+        domains,
+        dry_run=args.dry_run,
+        skip_existing=not args.force,
+    )
     write_output(rows)
     return 0
 

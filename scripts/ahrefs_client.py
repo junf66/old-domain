@@ -110,7 +110,7 @@ class AhrefsClient:
         return results
 
     def site_explorer_refdomains(
-        self, target: str, limit: int = 1000
+        self, target: str, limit: int = 100
     ) -> list[dict]:
         """Top referring domains by DR.
 
@@ -134,7 +134,7 @@ class AhrefsClient:
         return []
 
     def site_explorer_anchors(
-        self, target: str, limit: int = 20
+        self, target: str, limit: int = 5
     ) -> list[dict]:
         """Top anchor texts for a domain (by referring domains desc)."""
         params = {
