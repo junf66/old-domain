@@ -415,6 +415,9 @@ def analyze(
         print(f"[ahrefs] batch-analysis for {len(domains)} domains...")
         batch_rows = client.batch_analysis(domains)
 
+    wayback_skip_after = 5  # consecutive failures before giving up on Wayback
+    wayback_failures = 0
+    wayback_disabled = False
     for i, domain in enumerate(domains, start=1):
         print(f"[{i}/{len(domains)}] {domain}")
         if dry_run:
@@ -459,20 +462,29 @@ def analyze(
             except Exception as exc:
                 print(f"  anchors fetch failed: {exc}")
                 anchors = []
-            try:
-                wayback = wayback_summarize(domain)
-            except Exception as exc:
-                print(f"  wayback fetch failed: {exc}")
-                wayback = {
-                    "first_snapshot": None,
-                    "last_snapshot": None,
-                    "last_snapshot_ts": None,
-                    "snapshot_count": 0,
-                    "years_active": 0.0,
-                    "title": "",
-                    "text_sample": "",
-                    "has_japanese": False,
-                }
+            wayback = {
+                "first_snapshot": None,
+                "last_snapshot": None,
+                "last_snapshot_ts": None,
+                "snapshot_count": 0,
+                "years_active": 0.0,
+                "title": "",
+                "text_sample": "",
+                "has_japanese": False,
+            }
+            if not wayback_disabled:
+                try:
+                    wayback = wayback_summarize(domain, timeout=12)
+                    wayback_failures = 0
+                except Exception as exc:
+                    wayback_failures += 1
+                    print(f"  wayback fetch failed ({wayback_failures}): {exc}")
+                    if wayback_failures >= wayback_skip_after:
+                        wayback_disabled = True
+                        print(
+                            f"  [wayback] {wayback_skip_after} consecutive failures — "
+                            f"skipping Wayback for the remaining domains in this run."
+                        )
             time.sleep(sleep_between)
 
         category, _cat_scores = categorize(
