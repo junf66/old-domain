@@ -136,7 +136,7 @@ class AhrefsClient:
             "mode": "domain",
             "limit": limit,
             "order_by": "refdomains:desc",
-            "select": "anchor,refdomains,backlinks",
+            "select": "anchor,refdomains",
         }
         data = self._get("site-explorer/anchors", params=params)
         return data.get("anchors") or data.get("results") or []
