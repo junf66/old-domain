@@ -51,11 +51,14 @@ class AhrefsClient:
         """Return remaining credits / limits for the account."""
         return self._get("subscription-info/limits-and-usage", params={})
 
-    def batch_analysis(self, domains: Iterable[str]) -> list[dict]:
-        """Run batch-analysis for up to 100 domains at a time.
+    def batch_analysis(
+        self, domains: Iterable[str], chunk_size: int = 50, retries: int = 3
+    ) -> list[dict]:
+        """Run batch-analysis for up to `chunk_size` domains at a time.
 
-        Returns a list of per-domain dicts with DR, refdomains,
-        organic keywords, and organic traffic.
+        On transient Ahrefs errors (HTTP 5xx) we retry with exponential
+        backoff. If a chunk still fails, we skip it and continue so a
+        single bad batch can't kill an otherwise good run.
         """
         domains = [d.strip() for d in domains if d and d.strip()]
         results: list[dict] = []
@@ -68,8 +71,8 @@ class AhrefsClient:
             "refips",
             "refips_subnets",
         ]
-        for i in range(0, len(domains), 100):
-            chunk = domains[i : i + 100]
+        for i in range(0, len(domains), chunk_size):
+            chunk = domains[i : i + chunk_size]
             body = {
                 "select": select,
                 "targets": [
@@ -77,10 +80,32 @@ class AhrefsClient:
                     for d in chunk
                 ],
             }
-            data = self._post("batch-analysis/batch-analysis", body=body)
-            rows = data.get("targets") or data.get("results") or []
-            for row in rows:
-                results.append(row)
+            last_exc: Exception | None = None
+            for attempt in range(retries):
+                try:
+                    data = self._post("batch-analysis/batch-analysis", body=body)
+                    rows = data.get("targets") or data.get("results") or []
+                    results.extend(rows)
+                    last_exc = None
+                    break
+                except RuntimeError as exc:
+                    msg = str(exc)
+                    last_exc = exc
+                    # Only retry on Ahrefs-side transient errors (5xx).
+                    if " 5" in msg and "Ahrefs API error" in msg and attempt < retries - 1:
+                        wait = 2 ** attempt
+                        print(
+                            f"  [batch] attempt {attempt+1} failed (5xx). "
+                            f"Retrying in {wait}s..."
+                        )
+                        time.sleep(wait)
+                        continue
+                    break
+            if last_exc is not None:
+                print(
+                    f"  [batch] giving up on chunk {i}-{i+len(chunk)-1}: "
+                    f"{last_exc}"
+                )
             time.sleep(0.3)
         return results
 
