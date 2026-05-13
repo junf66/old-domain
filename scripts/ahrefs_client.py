@@ -125,7 +125,13 @@ class AhrefsClient:
             "select": "domain,domain_rating",
         }
         data = self._get("site-explorer/refdomains", params=params)
-        return data.get("refdomains") or data.get("results") or []
+        # Ahrefs has historically wrapped the array under several names —
+        # accept whichever appears.
+        for k in ("refdomains", "results", "data", "rows", "items"):
+            v = data.get(k) if isinstance(data, dict) else None
+            if isinstance(v, list):
+                return v
+        return []
 
     def site_explorer_anchors(
         self, target: str, limit: int = 20
