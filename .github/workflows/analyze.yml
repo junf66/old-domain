@@ -8,6 +8,11 @@ on:
         description: "Process only the first N domains (debug). Leave 0 for full run."
         required: false
         default: "0"
+      force:
+        description: "Re-analyse domains even if already in docs/data.json (bypass cache)."
+        required: false
+        type: boolean
+        default: false
   # Auto-run whenever a CSV is added or updated under data/input/.
   push:
     paths:
@@ -41,12 +46,16 @@ jobs:
         env:
           AHREFS_API_KEY: ${{ secrets.AHREFS_API_KEY }}
           LIMIT: ${{ inputs.limit }}
+          FORCE: ${{ inputs.force }}
         run: |
+          ARGS=""
           if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
-            python scripts/analyze.py --limit "$LIMIT"
-          else
-            python scripts/analyze.py
+            ARGS="$ARGS --limit $LIMIT"
           fi
+          if [ "$FORCE" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python scripts/analyze.py $ARGS
 
       - name: Commit updated docs/data.json
         run: |
