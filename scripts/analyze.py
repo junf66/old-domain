@@ -170,9 +170,23 @@ DOMAIN_COLUMN_CANDIDATES = (
     "Domain",
     "domain",
     "DOMAIN",
+    "Domain Name",
+    "DomainName",
     "URL",
     "url",
+    "ドメイン",
+    "ドメイン名",
 )
+
+
+def _looks_like_domain(value: str) -> bool:
+    s = (value or "").strip().lower()
+    if not s or " " in s or "\t" in s:
+        return False
+    if "." not in s:
+        return False
+    parts = s.split(".")
+    return len(parts) >= 2 and all(p for p in parts)
 
 
 def newest_csv(input_dir: Path) -> Path | None:
@@ -215,31 +229,51 @@ def load_all_domains(input_dir: Path) -> list[str]:
     return out
 
 
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in values:
+        key = (v or "").strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(v.strip())
+    return out
+
+
 def load_domains(csv_path: Path) -> list[str]:
     """Read a CSV and return a de-duplicated list of domains.
 
-    expireddomains.net exports are usually semicolon-separated; we try
-    both separators and pick whichever yields a known domain column.
+    Accepts several shapes:
+      1. Header row containing one of DOMAIN_COLUMN_CANDIDATES
+      2. No header — first column already looks like domains
+      3. Single-column file with one domain per line
     """
     last_error: Exception | None = None
     for sep in (",", ";", "\t"):
+        # --- with header ---
         try:
             df = pd.read_csv(csv_path, sep=sep, dtype=str, keep_default_na=False)
         except Exception as exc:  # pragma: no cover
             last_error = exc
-            continue
-        for col in DOMAIN_COLUMN_CANDIDATES:
-            if col in df.columns:
-                values = [v.strip() for v in df[col].tolist() if v and v.strip()]
-                # Preserve order while de-duplicating.
-                seen: set[str] = set()
-                out: list[str] = []
-                for v in values:
-                    key = v.lower()
-                    if key not in seen:
-                        seen.add(key)
-                        out.append(v)
-                return out
+            df = None
+        if df is not None and len(df.columns) > 0:
+            for col in DOMAIN_COLUMN_CANDIDATES:
+                if col in df.columns:
+                    return _dedupe(df[col].tolist())
+            # Heuristic A: the "header" is itself a domain → no header
+            first_header = str(df.columns[0])
+            if _looks_like_domain(first_header):
+                df_nh = pd.read_csv(
+                    csv_path, sep=sep, dtype=str,
+                    keep_default_na=False, header=None,
+                )
+                return _dedupe(df_nh.iloc[:, 0].tolist())
+            # Heuristic B: first column values look like domains
+            first_vals = df.iloc[:, 0].tolist()
+            domainish = sum(1 for v in first_vals if _looks_like_domain(v))
+            if domainish >= max(1, len(first_vals) // 2):
+                return _dedupe(first_vals)
+
     raise RuntimeError(
         f"Could not find a Domain column in {csv_path}. "
         f"Tried separators , ; \\t and columns {DOMAIN_COLUMN_CANDIDATES}. "
