@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-05-14T23:36:48.196541Z",
+  "generated_at": "2026-05-14T23:57:59.885969Z",
   "total": 163,
-  "fresh": 163,
-  "cached": 0,
+  "fresh": 0,
+  "cached": 163,
   "stale_refetched": 0,
   "ahrefs_batch_unmatched": 0,
-  "refdomains_errors": 105,
-  "anchors_errors": 105,
-  "wayback_errors": 7,
-  "wayback_disabled": true,
+  "refdomains_errors": 0,
+  "anchors_errors": 0,
+  "wayback_errors": 0,
+  "wayback_disabled": false,
   "batch_chunks_failed": 0,
   "errors": [],
   "written_rows": 163,
-  "zero_rows": 162
+  "zero_rows": 0
 }
