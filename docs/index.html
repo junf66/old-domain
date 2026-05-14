@@ -847,6 +847,9 @@
       <div class="stats" id="stats"></div>
     </div>
 
+    <div id="dataStatus" class="status" hidden></div>
+    <div id="qualityBanner" class="status info" hidden></div>
+
     <div id="tableHost">
       <table id="domains" class="display" style="width:100%">
         <thead>
@@ -1073,13 +1076,104 @@
       return "https://web.archive.org/web/" + stamp + "if_/" + d;
     }
 
+    function showDataStatus(kind, html) {
+      var el = document.getElementById("dataStatus");
+      if (!el) return;
+      el.hidden = false;
+      el.className = "status " + kind;
+      el.innerHTML = html;
+    }
+
+    function actionsLinkHtml() {
+      try {
+        var host = location.host;
+        var parts = location.pathname.split("/").filter(Boolean);
+        if (host.endsWith(".github.io") && parts.length > 0) {
+          var repo = host.split(".")[0] + "/" + parts[0];
+          var url = "https://github.com/" + repo + "/actions";
+          return ' <a href="' + url + '" target="_blank" rel="noopener">Actions の実行状況を確認 ↗</a>';
+        }
+      } catch (e) { /* fall through */ }
+      return "";
+    }
+
+    async function loadQuality() {
+      try {
+        var r = await fetch("quality.json", { cache: "no-store" });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function renderQualityBanner(q) {
+      var banner = document.getElementById("qualityBanner");
+      if (!banner || !q) return;
+      var parts = [];
+      if (q.ahrefs_batch_unmatched) parts.push("Ahrefs未照合: " + q.ahrefs_batch_unmatched + "件");
+      if (q.refdomains_errors) parts.push("参照ドメイン取得失敗: " + q.refdomains_errors + "件");
+      if (q.anchors_errors) parts.push("アンカー取得失敗: " + q.anchors_errors + "件");
+      if (q.wayback_errors) parts.push("Wayback失敗: " + q.wayback_errors + "件");
+      if (q.zero_rows) parts.push("ゼロ行: " + q.zero_rows + "件");
+      if (q.wayback_disabled) parts.push("Wayback自動停止");
+      if (q.batch_chunks_failed) parts.push("Ahrefsバッチ失敗チャンク: " + q.batch_chunks_failed);
+      if (q.stale_refetched) parts.push("ゼロ行を再取得: " + q.stale_refetched + "件");
+      if (!parts.length) return;
+      var severe = (q.ahrefs_batch_unmatched || 0) + (q.zero_rows || 0) > 0;
+      banner.hidden = false;
+      banner.className = "status " + (severe ? "error" : "info");
+      banner.innerHTML =
+        "<strong>スクリーニング品質:</strong> " + parts.join(" / ") +
+        " (取得時刻 " + (q.generated_at || "—") + ")";
+    }
+
     async function load() {
       let rows = [];
+      let fetchError = null;
+      let parseError = null;
+      let httpStatus = null;
       try {
         const r = await fetch("data.json", { cache: "no-store" });
-        rows = await r.json();
+        httpStatus = r.status;
+        if (!r.ok) {
+          fetchError = "HTTP " + r.status + " " + r.statusText;
+        } else {
+          const text = await r.text();
+          try {
+            rows = JSON.parse(text);
+          } catch (e) {
+            parseError = e && e.message ? e.message : String(e);
+          }
+        }
       } catch (e) {
-        console.error(e);
+        fetchError = (e && e.message) ? e.message : String(e);
+      }
+
+      const quality = await loadQuality();
+      renderQualityBanner(quality);
+
+      if (fetchError) {
+        showDataStatus(
+          "error",
+          "❌ <code>data.json</code> の読み込みに失敗しました (" + fetchError + ")。" +
+          actionsLinkHtml()
+        );
+        document.getElementById("tableHost").style.display = "none";
+        document.getElementById("empty").style.display = "none";
+        document.getElementById("stats").textContent = "—";
+        return;
+      }
+      if (parseError) {
+        showDataStatus(
+          "error",
+          "❌ <code>data.json</code> のJSON解析に失敗しました: " + parseError +
+          actionsLinkHtml()
+        );
+        document.getElementById("tableHost").style.display = "none";
+        document.getElementById("empty").style.display = "none";
+        document.getElementById("stats").textContent = "—";
+        return;
       }
 
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -1510,8 +1604,22 @@
           openModal();
           return;
         }
+        await doUpload(file);
+      }
 
+      // doUpload assumes the password check has already passed and a PAT
+      // is available. Split out so patSave can resume without re-asking
+      // for the password.
+      async function doUpload(file) {
         showStatus("アップロード中... (" + file.name + ")", "info");
+        var pat = getPat();
+        if (!pat) {
+          // Should not happen — but guard against it explicitly.
+          pendingFile = file;
+          showStatus("GitHub アクセストークンが未設定です。", "info");
+          openModal();
+          return;
+        }
         try {
           var b64 = await fileToBase64(file);
           var safeName = file.name.replace(/[^A-Za-z0-9._-]/g, "_");
@@ -1610,7 +1718,9 @@
         closeModal();
         if (pendingFile) {
           var f = pendingFile; pendingFile = null;
-          uploadFile(f);
+          // Password was already verified before openModal() was called;
+          // jump straight to the upload step to avoid a second prompt.
+          doUpload(f);
         } else {
           showStatus("トークンを保存しました。", "success");
         }
