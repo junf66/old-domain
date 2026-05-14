@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-05-14T23:36:48.196541Z",
+  "total": 163,
+  "fresh": 163,
+  "cached": 0,
+  "stale_refetched": 0,
+  "ahrefs_batch_unmatched": 0,
+  "refdomains_errors": 105,
+  "anchors_errors": 105,
+  "wayback_errors": 7,
+  "wayback_disabled": true,
+  "batch_chunks_failed": 0,
+  "errors": [],
+  "written_rows": 163,
+  "zero_rows": 162
+}
