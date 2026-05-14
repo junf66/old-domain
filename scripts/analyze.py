@@ -495,26 +495,34 @@ def _f(row: dict, *keys, default: float = 0.0) -> float:
 
 
 def _row_has_real_data(row: dict) -> bool:
-    """Return True if a cached row looks like a successful analysis.
+    """Return True if a cached row carries enough Ahrefs signal to reuse.
 
-    A row is treated as cache-worthy only when at least one substantive
-    signal is non-zero. Otherwise we re-fetch — this prevents a single
-    failed run (which writes all-zeros) from poisoning every subsequent
-    run via the ``skip_existing`` shortcut.
+    A row is treated as cache-worthy when batch-analysis returned real
+    numbers (DR / refdomains / org_*) for it. Sub-fetch failures
+    (refdomains list, anchors, Wayback) do **not** disqualify the row —
+    those failures are already recorded in ``row["errors"]`` for the UI
+    and re-running just to retry them would waste Ahrefs credits without
+    fixing the underlying upstream issue (typically rate-limiting).
+
+    We do still re-fetch when the batch row itself was missing
+    (``ahrefs_batch_unmatched`` in errors), since that's the case where
+    an actual API failure poisoned the data.
     """
     if not isinstance(row, dict):
         return False
-    if row.get("errors"):
+    errs = row.get("errors") or []
+    if any(e == "ahrefs_batch_unmatched" or str(e).startswith("batch-analysis")
+           for e in errs):
         return False
     if (row.get("dr") or 0) > 0:
         return True
     if (row.get("refdomains") or 0) > 0:
         return True
-    if (row.get("snapshot_count") or 0) > 0:
-        return True
     if (row.get("org_keywords") or 0) > 0:
         return True
     if (row.get("org_traffic") or 0) > 0:
+        return True
+    if (row.get("snapshot_count") or 0) > 0:
         return True
     return False
 
@@ -617,7 +625,9 @@ def analyze(
         else:
             batch_rows = []
 
-    wayback_skip_after = 5  # consecutive failures before giving up on Wayback
+    # Wayback is flaky (web.archive.org occasionally 429s/timeouts under
+    # load). Be generous before disabling it for the rest of the run.
+    wayback_skip_after = 15
     wayback_failures = 0
     wayback_disabled = False
     for i, domain in enumerate(domains, start=1):

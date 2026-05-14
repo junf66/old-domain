@@ -12,6 +12,14 @@ import requests
 
 API_BASE = "https://api.ahrefs.com/v3"
 
+# Ahrefs sits behind Cloudflare, which 429-rejects the bare
+# python-requests UA with a "Just a moment..." challenge page. Send a
+# real-looking UA so the requests reach the API.
+USER_AGENT = (
+    "old-domain-tool/0.1 "
+    "Mozilla/5.0 (compatible; +https://github.com/junf66/old-domain)"
+)
+
 
 class AhrefsClient:
     def __init__(self, api_key: str | None = None, timeout: int = 30):
@@ -26,41 +34,115 @@ class AhrefsClient:
             {
                 "Authorization": f"Bearer {self.api_key}",
                 "Accept": "application/json",
+                "User-Agent": USER_AGENT,
             }
         )
 
-    def _get(self, path: str, params: dict) -> dict:
+    @staticmethod
+    def _retry_wait(resp: requests.Response | None, attempt: int) -> float:
+        """Compute backoff for a transient failure.
+
+        Honours the upstream ``Retry-After`` header when present (Ahrefs /
+        Cloudflare set it on 429s), otherwise falls back to exponential
+        backoff capped at 30s.
+        """
+        if resp is not None:
+            ra = resp.headers.get("Retry-After")
+            if ra:
+                try:
+                    return min(float(ra), 60.0)
+                except ValueError:
+                    pass
+        return min(2 ** attempt * 2.0, 30.0)
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+        json_body: dict | None = None,
+        retries: int = 4,
+    ) -> dict:
+        """HTTP call with retry on transient errors (5xx, 429, network).
+
+        Raises ``RuntimeError`` on a non-recoverable HTTP error or after
+        exhausting retries on a transient one. Successful responses are
+        returned as parsed JSON.
+        """
         url = f"{API_BASE}/{path.lstrip('/')}"
-        resp = self.session.get(url, params=params, timeout=self.timeout)
-        if resp.status_code >= 400:
+        last_exc: Exception | None = None
+        last_resp: requests.Response | None = None
+        for attempt in range(retries):
+            try:
+                resp = self.session.request(
+                    method, url,
+                    params=params,
+                    json=json_body,
+                    timeout=self.timeout,
+                )
+            except requests.RequestException as exc:
+                last_exc = exc
+                last_resp = None
+                if attempt < retries - 1:
+                    wait = self._retry_wait(None, attempt)
+                    print(
+                        f"  [http] {path} network error (attempt {attempt+1}): "
+                        f"{exc}; retry in {wait:.1f}s"
+                    )
+                    time.sleep(wait)
+                    continue
+                break
+            last_resp = resp
+            status = resp.status_code
+            if status < 400:
+                try:
+                    return resp.json()
+                except ValueError as exc:
+                    raise RuntimeError(
+                        f"Ahrefs API returned non-JSON on {path}: "
+                        f"{resp.text[:200]}"
+                    ) from exc
+            transient = status == 429 or status >= 500
+            if transient and attempt < retries - 1:
+                wait = self._retry_wait(resp, attempt)
+                print(
+                    f"  [http] {path} HTTP {status} (attempt {attempt+1}); "
+                    f"retry in {wait:.1f}s"
+                )
+                time.sleep(wait)
+                continue
+            break
+        if last_resp is not None:
             raise RuntimeError(
-                f"Ahrefs API error {resp.status_code} on {path}: {resp.text[:400]}"
+                f"Ahrefs API error {last_resp.status_code} on {path}: "
+                f"{last_resp.text[:400]}"
             )
-        return resp.json()
+        raise RuntimeError(
+            f"Ahrefs API request failed on {path}: {last_exc}"
+        )
+
+    def _get(self, path: str, params: dict) -> dict:
+        return self._request("GET", path, params=params)
 
     def _post(self, path: str, body: dict) -> dict:
-        url = f"{API_BASE}/{path.lstrip('/')}"
-        resp = self.session.post(url, json=body, timeout=self.timeout)
-        if resp.status_code >= 400:
-            raise RuntimeError(
-                f"Ahrefs API error {resp.status_code} on {path}: {resp.text[:400]}"
-            )
-        return resp.json()
+        return self._request("POST", path, json_body=body)
 
     def subscription_info(self) -> dict:
         """Return remaining credits / limits for the account."""
         return self._get("subscription-info/limits-and-usage", params={})
 
     def batch_analysis(
-        self, domains: Iterable[str], chunk_size: int = 50, retries: int = 3
+        self, domains: Iterable[str], chunk_size: int = 50
     ) -> list[dict]:
-        """Run batch-analysis for up to `chunk_size` domains at a time.
+        """Run batch-analysis for up to ``chunk_size`` domains at a time.
 
-        Retries on transient Ahrefs 5xx errors with exponential backoff.
-        Per-chunk failures are recorded on ``self.last_batch_failures`` so
-        callers can decide whether to abort. If **every** chunk fails the
-        method raises — previously we returned ``[]``, which let the
-        analyser overwrite ``docs/data.json`` with all-zero rows.
+        Per-request 429/5xx retries are handled inside :meth:`_request`,
+        so a chunk only ends up here as a hard failure if every retry
+        was exhausted. We still record per-chunk failure counts on
+        ``self.last_batch_failures`` and raise when *every* chunk
+        failed (otherwise the analyser would happily overwrite
+        ``docs/data.json`` with all-zero rows).
         """
         domains = [d.strip() for d in domains if d and d.strip()]
         results: list[dict] = []
@@ -86,34 +168,18 @@ class AhrefsClient:
                     for d in chunk
                 ],
             }
-            chunk_exc: Exception | None = None
-            for attempt in range(retries):
-                try:
-                    data = self._post("batch-analysis/batch-analysis", body=body)
-                    rows = data.get("targets") or data.get("results") or []
-                    results.extend(rows)
-                    chunk_exc = None
-                    break
-                except RuntimeError as exc:
-                    msg = str(exc)
-                    chunk_exc = exc
-                    # Only retry on Ahrefs-side transient errors (5xx).
-                    if " 5" in msg and "Ahrefs API error" in msg and attempt < retries - 1:
-                        wait = 2 ** attempt
-                        print(
-                            f"  [batch] attempt {attempt+1} failed (5xx). "
-                            f"Retrying in {wait}s..."
-                        )
-                        time.sleep(wait)
-                        continue
-                    break
-            if chunk_exc is not None:
+            try:
+                data = self._post("batch-analysis/batch-analysis", body=body)
+            except RuntimeError as exc:
                 chunk_failures += 1
-                last_exc = chunk_exc
+                last_exc = exc
                 print(
-                    f"  [batch] giving up on chunk {i}-{i+len(chunk)-1}: "
-                    f"{chunk_exc}"
+                    f"  [batch] giving up on chunk {i}-{i+len(chunk)-1}: {exc}"
                 )
+                time.sleep(0.3)
+                continue
+            rows = data.get("targets") or data.get("results") or []
+            results.extend(rows)
             time.sleep(0.3)
         self.last_batch_failures = chunk_failures
         if total_chunks and chunk_failures == total_chunks:
