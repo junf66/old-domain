@@ -132,29 +132,61 @@ def _parse_ts(ts: str) -> datetime | None:
         return None
 
 
-def fetch_cdx(domain: str, timeout: int = 30) -> list[dict[str, Any]]:
-    """Return all snapshots for `domain` as a list of dicts.
+def fetch_cdx(
+    domain: str, timeout: int = 30, retries: int = 3
+) -> list[dict[str, Any]]:
+    """Return all snapshots for ``domain`` as a list of dicts.
 
-    Each row: {timestamp, original, mimetype, statuscode, digest}
+    Each row: ``{timestamp, original, mimetype, statuscode, digest}``.
+
+    Retries on 429 / 5xx / network errors with exponential backoff
+    (3s, 6s, 12s) since Wayback intermittently returns those under
+    load and the previous bare ``requests.get`` would fail outright.
     """
+    import time as _time
+
     params = {
         "url": domain,
         "output": "json",
         "fl": "timestamp,original,mimetype,statuscode,digest",
         "collapse": "digest",
     }
-    resp = requests.get(
-        CDX_URL,
-        params=params,
-        timeout=timeout,
-        headers={"User-Agent": USER_AGENT},
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data:
-        return []
-    header, *rows = data
-    return [dict(zip(header, row)) for row in rows]
+    last_exc: Exception | None = None
+    last_resp: requests.Response | None = None
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                CDX_URL,
+                params=params,
+                timeout=timeout,
+                headers={"User-Agent": USER_AGENT},
+            )
+        except requests.RequestException as exc:
+            last_exc = exc
+            last_resp = None
+            if attempt < retries - 1:
+                _time.sleep(3 * (2 ** attempt))
+                continue
+            raise
+        last_resp = resp
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt < retries - 1:
+                ra = resp.headers.get("Retry-After")
+                wait = float(ra) if ra and ra.isdigit() else 3 * (2 ** attempt)
+                _time.sleep(min(wait, 30.0))
+                continue
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return []
+        header, *rows = data
+        return [dict(zip(header, row)) for row in rows]
+    # Exhausted retries on transient status — surface the last response.
+    if last_resp is not None:
+        last_resp.raise_for_status()
+    if last_exc is not None:
+        raise last_exc
+    return []
 
 
 def summarize(
