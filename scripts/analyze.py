@@ -178,15 +178,56 @@ DOMAIN_COLUMN_CANDIDATES = (
     "ドメイン名",
 )
 
+# Literal cell values that must never be treated as a domain even if they
+# slip through the heuristics (typically header rows or sentinel labels).
+_HEADER_LITERALS = {
+    "domain", "domain name", "domainname", "domains",
+    "url", "urls", "host", "hostname",
+    "ドメイン", "ドメイン名",
+}
+
+
+def normalize_domain(value: object) -> str | None:
+    """Return a canonical lowercase domain, or ``None`` if not a domain.
+
+    Strips URL scheme, leading ``www.``, path/query, and surrounding
+    whitespace. Returns ``None`` for header strings ("Domain", "URL", …),
+    empty cells, and obvious non-domains (no dot, contains whitespace, …).
+    """
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # Drop the scheme and anything after the first path/query/fragment char.
+    low = s.lower()
+    for proto in ("https://", "http://", "//"):
+        if low.startswith(proto):
+            low = low[len(proto):]
+            break
+    for sep in ("/", "?", "#", " ", "\t"):
+        idx = low.find(sep)
+        if idx >= 0:
+            low = low[:idx]
+    low = low.rstrip(".")
+    if low.startswith("www."):
+        low = low[4:]
+    if not low or low in _HEADER_LITERALS:
+        return None
+    if "." not in low:
+        return None
+    parts = low.split(".")
+    if len(parts) < 2 or not all(parts):
+        return None
+    # Reject values with characters that can't appear in a hostname.
+    allowed = set("abcdefghijklmnopqrstuvwxyz0123456789-.")
+    if any(ch not in allowed for ch in low):
+        return None
+    return low
+
 
 def _looks_like_domain(value: str) -> bool:
-    s = (value or "").strip().lower()
-    if not s or " " in s or "\t" in s:
-        return False
-    if "." not in s:
-        return False
-    parts = s.split(".")
-    return len(parts) >= 2 and all(p for p in parts)
+    return normalize_domain(value) is not None
 
 
 def newest_csv(input_dir: Path) -> Path | None:
@@ -229,24 +270,41 @@ def load_all_domains(input_dir: Path) -> list[str]:
     return out
 
 
-def _dedupe(values: list[str]) -> list[str]:
+def _dedupe(values: list[object], source: str | None = None) -> list[str]:
+    """Normalize each value and return de-duplicated canonical domains.
+
+    Logs how many rows were dropped because they did not look like domains
+    so that ``Domain`` / ``URL`` header strings (and other noise) are
+    visible rather than silently passed through to Ahrefs.
+    """
     seen: set[str] = set()
     out: list[str] = []
+    dropped = 0
     for v in values:
-        key = (v or "").strip().lower()
-        if key and key not in seen:
-            seen.add(key)
-            out.append(v.strip())
+        dom = normalize_domain(v)
+        if not dom:
+            if (v is not None) and str(v).strip():
+                dropped += 1
+            continue
+        if dom not in seen:
+            seen.add(dom)
+            out.append(dom)
+    if dropped:
+        label = f" ({source})" if source else ""
+        print(f"[input] dropped {dropped} non-domain row(s){label}")
     return out
 
 
 def load_domains(csv_path: Path) -> list[str]:
-    """Read a CSV and return a de-duplicated list of domains.
+    """Read a CSV and return a list of canonical, de-duplicated domains.
 
     Accepts several shapes:
       1. Header row containing one of DOMAIN_COLUMN_CANDIDATES
       2. No header — first column already looks like domains
       3. Single-column file with one domain per line
+
+    All returned values pass through ``normalize_domain`` so callers can
+    rely on them being scheme-less, ``www.``-less, lowercase domains.
     """
     last_error: Exception | None = None
     for sep in (",", ";", "\t"):
@@ -259,7 +317,7 @@ def load_domains(csv_path: Path) -> list[str]:
         if df is not None and len(df.columns) > 0:
             for col in DOMAIN_COLUMN_CANDIDATES:
                 if col in df.columns:
-                    return _dedupe(df[col].tolist())
+                    return _dedupe(df[col].tolist(), source=csv_path.name)
             # Heuristic A: the "header" is itself a domain → no header
             first_header = str(df.columns[0])
             if _looks_like_domain(first_header):
@@ -267,12 +325,12 @@ def load_domains(csv_path: Path) -> list[str]:
                     csv_path, sep=sep, dtype=str,
                     keep_default_na=False, header=None,
                 )
-                return _dedupe(df_nh.iloc[:, 0].tolist())
+                return _dedupe(df_nh.iloc[:, 0].tolist(), source=csv_path.name)
             # Heuristic B: first column values look like domains
             first_vals = df.iloc[:, 0].tolist()
             domainish = sum(1 for v in first_vals if _looks_like_domain(v))
             if domainish >= max(1, len(first_vals) // 2):
-                return _dedupe(first_vals)
+                return _dedupe(first_vals, source=csv_path.name)
 
     raise RuntimeError(
         f"Could not find a Domain column in {csv_path}. "
@@ -365,13 +423,35 @@ def detect_spam(anchors: list[dict]) -> tuple[bool, list[str]]:
 
 
 def _batch_row_for(domain: str, batch: list[dict]) -> dict:
-    """batch-analysis rows may use "url" or "target" as the key."""
-    dlow = domain.lower().strip()
+    """Find the batch-analysis row that matches ``domain``.
+
+    Ahrefs returns the target URL with the scheme prefix and a trailing
+    slash (e.g. ``"https://example.com/"``) and may emit multiple rows for
+    a single target when ``protocol=both`` was requested. Normalize both
+    sides through :func:`normalize_domain` so the comparison succeeds and
+    pick the row with the strongest signal (highest ``domain_rating``).
+    """
+    target = normalize_domain(domain)
+    if not target:
+        return {}
+    candidates: list[dict] = []
     for row in batch:
         for k in ("url", "target"):
-            if (row.get(k) or "").lower().strip().rstrip("/") == dlow:
-                return row
-    return {}
+            v = row.get(k) if isinstance(row, dict) else None
+            if v and normalize_domain(v) == target:
+                candidates.append(row)
+                break
+    if not candidates:
+        return {}
+    candidates.sort(
+        key=lambda r: (
+            _f(r, "domain_rating"),
+            _f(r, "refdomains"),
+            _f(r, "refips"),
+        ),
+        reverse=True,
+    )
+    return candidates[0]
 
 
 def _count_tld(refdoms: list[dict], suffix: str) -> int:
@@ -414,12 +494,44 @@ def _f(row: dict, *keys, default: float = 0.0) -> float:
     return default
 
 
+def _row_has_real_data(row: dict) -> bool:
+    """Return True if a cached row looks like a successful analysis.
+
+    A row is treated as cache-worthy only when at least one substantive
+    signal is non-zero. Otherwise we re-fetch — this prevents a single
+    failed run (which writes all-zeros) from poisoning every subsequent
+    run via the ``skip_existing`` shortcut.
+    """
+    if not isinstance(row, dict):
+        return False
+    if row.get("errors"):
+        return False
+    if (row.get("dr") or 0) > 0:
+        return True
+    if (row.get("refdomains") or 0) > 0:
+        return True
+    if (row.get("snapshot_count") or 0) > 0:
+        return True
+    if (row.get("org_keywords") or 0) > 0:
+        return True
+    if (row.get("org_traffic") or 0) > 0:
+        return True
+    return False
+
+
 def analyze(
     domains: list[str],
     dry_run: bool = False,
     sleep_between: float = 0.5,
     skip_existing: bool = True,
-) -> list[dict]:
+) -> tuple[list[dict], dict]:
+    """Analyse ``domains`` and return ``(rows, quality)``.
+
+    ``quality`` is an aggregate summary describing how many domains
+    succeeded, hit cached data, or failed against each upstream
+    (Ahrefs batch / refdomains / anchors, Wayback). It is also written
+    to ``docs/quality.json`` so the dashboard can render it.
+    """
     rows: list[dict] = []
 
     # ---- skip already-analysed domains so we don't burn credits again ----
@@ -429,7 +541,7 @@ def analyze(
             prior = json.loads(DOCS_DATA.read_text(encoding="utf-8"))
             if isinstance(prior, list):
                 for r in prior:
-                    d = (r.get("domain") or "").lower().strip()
+                    d = normalize_domain(r.get("domain"))
                     if d:
                         existing_by_domain[d] = r
         except Exception:
@@ -437,16 +549,40 @@ def analyze(
 
     fresh_domains: list[str] = []
     cached_count = 0
+    stale_cached_count = 0
     for d in domains:
-        if d.lower() in existing_by_domain:
+        key = (normalize_domain(d) or d.lower())
+        prior_row = existing_by_domain.get(key)
+        if prior_row and _row_has_real_data(prior_row):
             cached_count += 1
         else:
+            if prior_row:
+                stale_cached_count += 1
             fresh_domains.append(d)
     if cached_count:
         print(
             f"[cache] {cached_count} domain(s) already analysed — reusing existing scores"
         )
+    if stale_cached_count:
+        print(
+            f"[cache] {stale_cached_count} domain(s) had zero-data cache — re-fetching"
+        )
     domains_to_fetch = fresh_domains
+
+    # Per-domain error / quality counters.
+    quality = {
+        "total": len(domains),
+        "fresh": len(fresh_domains),
+        "cached": cached_count,
+        "stale_refetched": stale_cached_count,
+        "ahrefs_batch_unmatched": 0,
+        "refdomains_errors": 0,
+        "anchors_errors": 0,
+        "wayback_errors": 0,
+        "wayback_disabled": False,
+        "batch_chunks_failed": 0,
+        "errors": [],
+    }
 
     if dry_run:
         batch_rows: list[dict] = []
@@ -458,9 +594,26 @@ def analyze(
             print(f"[ahrefs] subscription info: {info}")
         except Exception as exc:
             print(f"[ahrefs] WARN could not fetch subscription info: {exc}")
+            quality["errors"].append(f"subscription-info: {exc}")
         if domains_to_fetch:
             print(f"[ahrefs] batch-analysis for {len(domains_to_fetch)} domains...")
-            batch_rows = client.batch_analysis(domains_to_fetch)
+            try:
+                batch_rows = client.batch_analysis(domains_to_fetch)
+            except Exception as exc:
+                quality["errors"].append(f"batch-analysis: {exc}")
+                raise
+            quality["batch_chunks_failed"] = getattr(
+                client, "last_batch_failures", 0
+            )
+            # Detect the case where Ahrefs returned nothing meaningful at
+            # all (auth/credits/etc.). Refuse to clobber the dashboard.
+            if not batch_rows and domains_to_fetch:
+                raise RuntimeError(
+                    "Ahrefs batch-analysis returned no rows for "
+                    f"{len(domains_to_fetch)} domain(s). Refusing to write "
+                    "zero-only data to docs/data.json. "
+                    "Check API key / credits / rate limit and retry."
+                )
         else:
             batch_rows = []
 
@@ -468,12 +621,14 @@ def analyze(
     wayback_failures = 0
     wayback_disabled = False
     for i, domain in enumerate(domains, start=1):
-        cached = existing_by_domain.get(domain.lower())
-        if cached:
+        key = normalize_domain(domain) or domain.lower()
+        cached = existing_by_domain.get(key)
+        if cached and _row_has_real_data(cached):
             print(f"[{i}/{len(domains)}] {domain}  (cached)")
             rows.append(cached)
             continue
         print(f"[{i}/{len(domains)}] {domain}")
+        row_errors: list[str] = []
         if dry_run:
             dr = 42
             refdomains = 123
@@ -497,6 +652,10 @@ def analyze(
             }
         else:
             row = _batch_row_for(domain, batch_rows)
+            if not row:
+                quality["ahrefs_batch_unmatched"] += 1
+                row_errors.append("ahrefs_batch_unmatched")
+                print(f"  [batch] no matching row for {domain}")
             dr = _f(row, "domain_rating")
             refdomains = int(_f(row, "refdomains"))
             org_kw = int(_f(row, "org_keywords"))
@@ -508,6 +667,8 @@ def analyze(
             except Exception as exc:
                 print(f"  refdomains fetch failed: {exc}")
                 refdoms = []
+                quality["refdomains_errors"] += 1
+                row_errors.append(f"refdomains: {exc}")
             if i == 1:
                 # One-shot debug so we can verify the actual response shape.
                 preview = refdoms[:3] if isinstance(refdoms, list) else refdoms
@@ -520,6 +681,8 @@ def analyze(
             except Exception as exc:
                 print(f"  anchors fetch failed: {exc}")
                 anchors = []
+                quality["anchors_errors"] += 1
+                row_errors.append(f"anchors: {exc}")
             wayback = {
                 "first_snapshot": None,
                 "last_snapshot": None,
@@ -537,12 +700,17 @@ def analyze(
                 except Exception as exc:
                     wayback_failures += 1
                     print(f"  wayback fetch failed ({wayback_failures}): {exc}")
+                    quality["wayback_errors"] += 1
+                    row_errors.append(f"wayback: {exc}")
                     if wayback_failures >= wayback_skip_after:
                         wayback_disabled = True
+                        quality["wayback_disabled"] = True
                         print(
                             f"  [wayback] {wayback_skip_after} consecutive failures — "
                             f"skipping Wayback for the remaining domains in this run."
                         )
+            else:
+                row_errors.append("wayback: disabled (too many failures)")
             time.sleep(sleep_between)
 
         category, _cat_scores = categorize(
@@ -593,23 +761,42 @@ def analyze(
                 "top_anchors": [
                     (a.get("anchor") or "")[:60] for a in anchors[:5]
                 ],
+                "errors": row_errors,
                 **score,
             }
         )
 
+    # ---- Abort the run if Ahrefs returned no usable data at all. ------
+    # Without this guard, a single bad run (auth/credits/rate-limit)
+    # would silently overwrite docs/data.json with all-zero rows and
+    # poison the cache. We tolerate up to 50% unmatched, which already
+    # signals a serious upstream issue but might still be salvageable.
+    if not dry_run and len(fresh_domains) > 0:
+        unmatched = quality["ahrefs_batch_unmatched"]
+        if unmatched / max(len(fresh_domains), 1) > 0.5:
+            raise RuntimeError(
+                "Ahrefs batch-analysis returned no matching row for "
+                f"{unmatched}/{len(fresh_domains)} fresh domains. "
+                "Refusing to write mostly-zero data to docs/data.json."
+            )
+
     rows.sort(key=lambda r: r["score"], reverse=True)
-    return rows
+    quality["written_rows"] = len(rows)
+    quality["zero_rows"] = sum(1 for r in rows if not _row_has_real_data(r))
+    return rows, quality
 
 
-def write_output(rows: list[dict]) -> None:
+def write_output(rows: list[dict], quality: dict | None = None) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     snapshot_path = OUTPUT_DIR / f"data-{timestamp}.json"
-    payload = {
+    payload: dict[str, Any] = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "count": len(rows),
         "rows": rows,
     }
+    if quality is not None:
+        payload["quality"] = quality
     snapshot_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -619,6 +806,18 @@ def write_output(rows: list[dict]) -> None:
     )
     print(f"[write] {len(rows)} rows -> {DOCS_DATA.relative_to(ROOT)}")
     print(f"[write] snapshot -> {snapshot_path.relative_to(ROOT)}")
+
+    if quality is not None:
+        quality_path = ROOT / "docs" / "quality.json"
+        quality_payload = {
+            "generated_at": payload["generated_at"],
+            **quality,
+        }
+        quality_path.write_text(
+            json.dumps(quality_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[write] quality -> {quality_path.relative_to(ROOT)}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -677,12 +876,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[input] --limit {args.limit} applied")
     print(f"[input] total unique: {len(domains)} domain(s)")
 
-    rows = analyze(
+    rows, quality = analyze(
         domains,
         dry_run=args.dry_run,
         skip_existing=not args.force,
     )
-    write_output(rows)
+    write_output(rows, quality=quality)
+    print(
+        f"[quality] cached={quality['cached']} fresh={quality['fresh']} "
+        f"stale_refetched={quality['stale_refetched']} "
+        f"unmatched={quality['ahrefs_batch_unmatched']} "
+        f"refdomains_err={quality['refdomains_errors']} "
+        f"anchors_err={quality['anchors_errors']} "
+        f"wayback_err={quality['wayback_errors']} "
+        f"zero_rows={quality.get('zero_rows', 0)}"
+    )
     return 0
 
 

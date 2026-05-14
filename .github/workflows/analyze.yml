@@ -62,6 +62,11 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/data.json
+          # quality.json is optional — only stage it when present so older
+          # runs without it don't break the commit.
+          if [ -f docs/quality.json ]; then
+            git add docs/quality.json
+          fi
           if git diff --staged --quiet; then
             echo "No changes in docs/data.json; nothing to commit."
           else
