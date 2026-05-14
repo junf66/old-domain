@@ -82,7 +82,7 @@ class AhrefsClient:
             body = {
                 "select": select,
                 "targets": [
-                    {"url": d, "protocol": "both", "mode": "subdomains"}
+                    {"url": d, "protocol": "both", "mode": "domain"}
                     for d in chunk
                 ],
             }
