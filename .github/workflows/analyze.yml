@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: false
+      retry_failed:
+        description: "Skip CSV. Only retry previously-failed Wayback / refdomains / anchors fetches. No batch credits used."
+        required: false
+        type: boolean
+        default: false
   # Auto-run whenever a CSV is added or updated under data/input/.
   push:
     paths:
@@ -47,15 +52,21 @@ jobs:
           AHREFS_API_KEY: ${{ secrets.AHREFS_API_KEY }}
           LIMIT: ${{ inputs.limit }}
           FORCE: ${{ inputs.force }}
+          RETRY_FAILED: ${{ inputs.retry_failed }}
         run: |
           ARGS=""
-          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
-            ARGS="$ARGS --limit $LIMIT"
+          if [ "$RETRY_FAILED" = "true" ]; then
+            # retry-failed mode skips CSV input, so --limit / --force are ignored.
+            python scripts/analyze.py --retry-failed
+          else
+            if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+              ARGS="$ARGS --limit $LIMIT"
+            fi
+            if [ "$FORCE" = "true" ]; then
+              ARGS="$ARGS --force"
+            fi
+            python scripts/analyze.py $ARGS
           fi
-          if [ "$FORCE" = "true" ]; then
-            ARGS="$ARGS --force"
-          fi
-          python scripts/analyze.py $ARGS
 
       - name: Commit updated docs/data.json
         run: |
