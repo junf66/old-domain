@@ -672,13 +672,25 @@ def analyze(
             org_tr = int(_f(row, "org_traffic"))
             refips = int(_f(row, "refips"))
             refclass_c = int(_f(row, "refips_subnets", "refclass_c"))
-            try:
-                refdoms = client.site_explorer_refdomains(domain, limit=100)
-            except Exception as exc:
-                print(f"  refdomains fetch failed: {exc}")
+            ahrefs_dead = getattr(client, "quota_exhausted", False)
+            if ahrefs_dead:
                 refdoms = []
+                row_errors.append("refdomains: skipped (ahrefs quota exhausted)")
                 quality["refdomains_errors"] += 1
-                row_errors.append(f"refdomains: {exc}")
+            else:
+                try:
+                    refdoms = client.site_explorer_refdomains(domain, limit=100)
+                except Exception as exc:
+                    print(f"  refdomains fetch failed: {exc}")
+                    refdoms = []
+                    quality["refdomains_errors"] += 1
+                    row_errors.append(f"refdomains: {exc}")
+                    if getattr(client, "quota_exhausted", False):
+                        print(
+                            "  [ahrefs] quota exhausted — skipping all "
+                            "further Ahrefs calls in this run."
+                        )
+                        ahrefs_dead = True
             if i == 1:
                 # One-shot debug so we can verify the actual response shape.
                 preview = refdoms[:3] if isinstance(refdoms, list) else refdoms
@@ -686,13 +698,20 @@ def analyze(
             refdomains_gojp = _count_tld(refdoms, ".go.jp")
             refdomains_lgjp = _count_tld(refdoms, ".lg.jp")
             refdomains_acjp = _count_tld(refdoms, ".ac.jp")
-            try:
-                anchors = client.site_explorer_anchors(domain, limit=5)
-            except Exception as exc:
-                print(f"  anchors fetch failed: {exc}")
+            if ahrefs_dead:
                 anchors = []
+                row_errors.append("anchors: skipped (ahrefs quota exhausted)")
                 quality["anchors_errors"] += 1
-                row_errors.append(f"anchors: {exc}")
+            else:
+                try:
+                    anchors = client.site_explorer_anchors(domain, limit=5)
+                except Exception as exc:
+                    print(f"  anchors fetch failed: {exc}")
+                    anchors = []
+                    quality["anchors_errors"] += 1
+                    row_errors.append(f"anchors: {exc}")
+                    if getattr(client, "quota_exhausted", False):
+                        ahrefs_dead = True
             wayback = {
                 "first_snapshot": None,
                 "last_snapshot": None,
@@ -882,6 +901,10 @@ def retry_failed_rows(
         "refdomains_still_failing": 0,
         "anchors_still_failing": 0,
         "wayback_still_failing": 0,
+        "ahrefs_skipped_quota": 0,
+        "wayback_skipped_disabled": 0,
+        "ahrefs_quota_exhausted": False,
+        "wayback_disabled": False,
         "errors": [],
     }
     print(
@@ -908,6 +931,12 @@ def retry_failed_rows(
     # Process each row that needs *any* retry. We touch a row at most
     # once per upstream so the script stays linear in ``len(rows)``.
     affected = sorted(set(needs_refdomains) | set(needs_anchors) | set(needs_wayback))
+    # Wayback retry mode also gets the consecutive-failure circuit
+    # breaker; without it a 503/timeout storm on web.archive.org makes
+    # the workflow run for hours (~30 s per failed row).
+    wayback_skip_after = 15
+    wayback_consecutive_failures = 0
+    wayback_disabled = False
     for n, idx in enumerate(affected, start=1):
         row = rows[idx]
         domain = row.get("domain") or ""
@@ -927,49 +956,86 @@ def retry_failed_rows(
         new_errs: list[str] = list(kept_errs)
         print(f"[{n}/{len(affected)}] {domain}")
 
-        if idx in needs_refdomains and client is not None:
-            try:
-                refdoms = client.site_explorer_refdomains(domain, limit=100)
-                row["refdomains_gojp"] = _count_tld(refdoms, ".go.jp")
-                row["refdomains_lgjp"] = _count_tld(refdoms, ".lg.jp")
-                row["refdomains_acjp"] = _count_tld(refdoms, ".ac.jp")
-                quality["refdomains_recovered"] += 1
-            except Exception as exc:
-                print(f"  refdomains retry failed: {exc}")
-                new_errs.append(f"refdomains: {exc}")
-                quality["refdomains_still_failing"] += 1
+        ahrefs_dead = client is None or client.quota_exhausted
 
-        if idx in needs_anchors and client is not None:
-            try:
-                anchors = client.site_explorer_anchors(domain, limit=5)
-                has_spam, spam_hits = detect_spam(anchors)
-                row["has_spam"] = has_spam
-                row["spam_hits"] = spam_hits
-                row["top_anchors"] = [
-                    (a.get("anchor") or "")[:60] for a in anchors[:5]
-                ]
-                quality["anchors_recovered"] += 1
-            except Exception as exc:
-                print(f"  anchors retry failed: {exc}")
-                new_errs.append(f"anchors: {exc}")
+        if idx in needs_refdomains:
+            if ahrefs_dead:
+                new_errs.append("refdomains: skipped (ahrefs quota exhausted)")
+                quality["ahrefs_skipped_quota"] += 1
+                quality["refdomains_still_failing"] += 1
+            else:
+                try:
+                    refdoms = client.site_explorer_refdomains(domain, limit=100)
+                    row["refdomains_gojp"] = _count_tld(refdoms, ".go.jp")
+                    row["refdomains_lgjp"] = _count_tld(refdoms, ".lg.jp")
+                    row["refdomains_acjp"] = _count_tld(refdoms, ".ac.jp")
+                    quality["refdomains_recovered"] += 1
+                except Exception as exc:
+                    print(f"  refdomains retry failed: {exc}")
+                    new_errs.append(f"refdomains: {exc}")
+                    quality["refdomains_still_failing"] += 1
+                    if client is not None and client.quota_exhausted:
+                        print(
+                            "  [ahrefs] quota exhausted — skipping all "
+                            "further Ahrefs calls in this run."
+                        )
+                        ahrefs_dead = True
+                        quality["ahrefs_quota_exhausted"] = True
+
+        if idx in needs_anchors:
+            if ahrefs_dead:
+                new_errs.append("anchors: skipped (ahrefs quota exhausted)")
+                quality["ahrefs_skipped_quota"] += 1
                 quality["anchors_still_failing"] += 1
+            else:
+                try:
+                    anchors = client.site_explorer_anchors(domain, limit=5)
+                    has_spam, spam_hits = detect_spam(anchors)
+                    row["has_spam"] = has_spam
+                    row["spam_hits"] = spam_hits
+                    row["top_anchors"] = [
+                        (a.get("anchor") or "")[:60] for a in anchors[:5]
+                    ]
+                    quality["anchors_recovered"] += 1
+                except Exception as exc:
+                    print(f"  anchors retry failed: {exc}")
+                    new_errs.append(f"anchors: {exc}")
+                    quality["anchors_still_failing"] += 1
+                    if client is not None and client.quota_exhausted:
+                        ahrefs_dead = True
+                        quality["ahrefs_quota_exhausted"] = True
 
         if idx in needs_wayback:
-            try:
-                wb = wayback_summarize(domain, timeout=12)
-                row["first_snapshot"] = wb.get("first_snapshot")
-                row["last_snapshot"] = wb.get("last_snapshot")
-                row["last_snapshot_ts"] = wb.get("last_snapshot_ts")
-                row["snapshot_count"] = wb.get("snapshot_count", 0)
-                row["years_active"] = wb.get("years_active", 0.0)
-                row["has_japanese"] = bool(wb.get("has_japanese", False))
-                if wb.get("title"):
-                    row["title"] = wb.get("title", "")
-                quality["wayback_recovered"] += 1
-            except Exception as exc:
-                print(f"  wayback retry failed: {exc}")
-                new_errs.append(f"wayback: {exc}")
+            if wayback_disabled:
+                new_errs.append("wayback: skipped (disabled this run)")
+                quality["wayback_skipped_disabled"] += 1
                 quality["wayback_still_failing"] += 1
+            else:
+                try:
+                    wb = wayback_summarize(domain, timeout=12)
+                    row["first_snapshot"] = wb.get("first_snapshot")
+                    row["last_snapshot"] = wb.get("last_snapshot")
+                    row["last_snapshot_ts"] = wb.get("last_snapshot_ts")
+                    row["snapshot_count"] = wb.get("snapshot_count", 0)
+                    row["years_active"] = wb.get("years_active", 0.0)
+                    row["has_japanese"] = bool(wb.get("has_japanese", False))
+                    if wb.get("title"):
+                        row["title"] = wb.get("title", "")
+                    quality["wayback_recovered"] += 1
+                    wayback_consecutive_failures = 0
+                except Exception as exc:
+                    print(f"  wayback retry failed: {exc}")
+                    new_errs.append(f"wayback: {exc}")
+                    quality["wayback_still_failing"] += 1
+                    wayback_consecutive_failures += 1
+                    if wayback_consecutive_failures >= wayback_skip_after:
+                        wayback_disabled = True
+                        quality["wayback_disabled"] = True
+                        print(
+                            f"  [wayback] {wayback_skip_after} consecutive "
+                            "failures — skipping Wayback for the rest of "
+                            "this run."
+                        )
 
         # Recompute score with the (possibly) refreshed inputs.
         category, _ = categorize(
@@ -1056,8 +1122,22 @@ def main(argv: list[str] | None = None) -> int:
             f"{quality['rows_needing_anchors']} "
             f"wayback_recovered={quality['wayback_recovered']}/"
             f"{quality['rows_needing_wayback']} "
+            f"ahrefs_skipped_quota={quality['ahrefs_skipped_quota']} "
+            f"wayback_skipped_disabled={quality['wayback_skipped_disabled']} "
             f"zero_rows={quality.get('zero_rows', 0)}"
         )
+        if quality.get("ahrefs_quota_exhausted"):
+            print(
+                "[quality] WARN: Ahrefs API units limit was reached — "
+                "raise the limit and re-run with retry_failed=true to "
+                "fill the remaining refdomains / anchors rows."
+            )
+        if quality.get("wayback_disabled"):
+            print(
+                "[quality] WARN: Wayback was disabled after consecutive "
+                "failures — re-run with retry_failed=true later to fill "
+                "the remaining wayback rows."
+            )
         return 0
 
     if args.input is not None:

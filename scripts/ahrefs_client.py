@@ -29,6 +29,10 @@ class AhrefsClient:
                 "AHREFS_API_KEY is not set. Put it in .env or export it."
             )
         self.timeout = timeout
+        # Flips to True the first time the API returns "units limit reached".
+        # Callers should consult this before queueing another expensive call
+        # so we don't burn time on requests that will 403 outright.
+        self.quota_exhausted = False
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -103,6 +107,13 @@ class AhrefsClient:
                         f"Ahrefs API returned non-JSON on {path}: "
                         f"{resp.text[:200]}"
                     ) from exc
+            # Detect Ahrefs' "API units limit reached" so callers can stop
+            # queueing more requests. The 403 itself is non-transient, but
+            # the global flag lets the analyser skip future Ahrefs calls
+            # entirely instead of paying ~30 s per request to find out
+            # they'll all 403.
+            if status == 403 and "units limit reached" in resp.text.lower():
+                self.quota_exhausted = True
             transient = status == 429 or status >= 500
             if transient and attempt < retries - 1:
                 wait = self._retry_wait(resp, attempt)
