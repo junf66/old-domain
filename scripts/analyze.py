@@ -830,6 +830,180 @@ def write_output(rows: list[dict], quality: dict | None = None) -> None:
         print(f"[write] quality -> {quality_path.relative_to(ROOT)}")
 
 
+def retry_failed_rows(
+    sleep_between: float = 0.5,
+) -> tuple[list[dict], dict]:
+    """Re-attempt failed sub-fetches on existing rows in ``docs/data.json``.
+
+    For each row whose ``errors`` list contains a ``wayback:`` /
+    ``refdomains:`` / ``anchors:`` entry, re-call just that upstream and
+    update the row in place. Successful retries clear the matching error
+    entry; persistent failures keep it. The cached batch-analysis fields
+    (``dr`` / ``refdomains`` / ``org_*``) are **never** re-fetched, so
+    this mode does not consume Ahrefs batch credits — only site-explorer
+    credits for the rows that need refdomains/anchors retried.
+
+    Wayback retries are free.
+    """
+    if not DOCS_DATA.exists():
+        raise RuntimeError(
+            f"{DOCS_DATA} does not exist. Run a normal analyse first."
+        )
+    rows: list[dict] = json.loads(DOCS_DATA.read_text(encoding="utf-8"))
+    if not isinstance(rows, list):
+        raise RuntimeError(
+            f"{DOCS_DATA} is not a JSON array of rows."
+        )
+
+    needs_refdomains: list[int] = []
+    needs_anchors: list[int] = []
+    needs_wayback: list[int] = []
+    for idx, row in enumerate(rows):
+        errs = row.get("errors") or []
+        if any(str(e).startswith("refdomains:") for e in errs):
+            needs_refdomains.append(idx)
+        if any(str(e).startswith("anchors:") for e in errs):
+            needs_anchors.append(idx)
+        if any(
+            str(e).startswith("wayback:") or str(e) == "wayback: disabled (too many failures)"
+            for e in errs
+        ):
+            needs_wayback.append(idx)
+
+    quality: dict[str, Any] = {
+        "mode": "retry-failed",
+        "total": len(rows),
+        "rows_needing_refdomains": len(needs_refdomains),
+        "rows_needing_anchors": len(needs_anchors),
+        "rows_needing_wayback": len(needs_wayback),
+        "refdomains_recovered": 0,
+        "anchors_recovered": 0,
+        "wayback_recovered": 0,
+        "refdomains_still_failing": 0,
+        "anchors_still_failing": 0,
+        "wayback_still_failing": 0,
+        "errors": [],
+    }
+    print(
+        f"[retry] needs_refdomains={len(needs_refdomains)} "
+        f"needs_anchors={len(needs_anchors)} "
+        f"needs_wayback={len(needs_wayback)}"
+    )
+    if not (needs_refdomains or needs_anchors or needs_wayback):
+        print("[retry] no rows have failed sub-fetches — nothing to do.")
+        quality["written_rows"] = len(rows)
+        quality["zero_rows"] = sum(1 for r in rows if not _row_has_real_data(r))
+        return rows, quality
+
+    needs_ahrefs = bool(needs_refdomains or needs_anchors)
+    client = AhrefsClient() if needs_ahrefs else None
+    if client is not None:
+        try:
+            info = client.subscription_info()
+            print(f"[ahrefs] subscription info: {info}")
+        except Exception as exc:
+            print(f"[ahrefs] WARN could not fetch subscription info: {exc}")
+            quality["errors"].append(f"subscription-info: {exc}")
+
+    # Process each row that needs *any* retry. We touch a row at most
+    # once per upstream so the script stays linear in ``len(rows)``.
+    affected = sorted(set(needs_refdomains) | set(needs_anchors) | set(needs_wayback))
+    for n, idx in enumerate(affected, start=1):
+        row = rows[idx]
+        domain = row.get("domain") or ""
+        if not domain:
+            continue
+        # Drop the old errors that we are about to retry; keep anything
+        # else (e.g. ``ahrefs_batch_unmatched``) untouched.
+        prev_errs = row.get("errors") or []
+        kept_errs = [
+            e for e in prev_errs
+            if not (
+                str(e).startswith("refdomains:")
+                or str(e).startswith("anchors:")
+                or str(e).startswith("wayback:")
+            )
+        ]
+        new_errs: list[str] = list(kept_errs)
+        print(f"[{n}/{len(affected)}] {domain}")
+
+        if idx in needs_refdomains and client is not None:
+            try:
+                refdoms = client.site_explorer_refdomains(domain, limit=100)
+                row["refdomains_gojp"] = _count_tld(refdoms, ".go.jp")
+                row["refdomains_lgjp"] = _count_tld(refdoms, ".lg.jp")
+                row["refdomains_acjp"] = _count_tld(refdoms, ".ac.jp")
+                quality["refdomains_recovered"] += 1
+            except Exception as exc:
+                print(f"  refdomains retry failed: {exc}")
+                new_errs.append(f"refdomains: {exc}")
+                quality["refdomains_still_failing"] += 1
+
+        if idx in needs_anchors and client is not None:
+            try:
+                anchors = client.site_explorer_anchors(domain, limit=5)
+                has_spam, spam_hits = detect_spam(anchors)
+                row["has_spam"] = has_spam
+                row["spam_hits"] = spam_hits
+                row["top_anchors"] = [
+                    (a.get("anchor") or "")[:60] for a in anchors[:5]
+                ]
+                quality["anchors_recovered"] += 1
+            except Exception as exc:
+                print(f"  anchors retry failed: {exc}")
+                new_errs.append(f"anchors: {exc}")
+                quality["anchors_still_failing"] += 1
+
+        if idx in needs_wayback:
+            try:
+                wb = wayback_summarize(domain, timeout=12)
+                row["first_snapshot"] = wb.get("first_snapshot")
+                row["last_snapshot"] = wb.get("last_snapshot")
+                row["last_snapshot_ts"] = wb.get("last_snapshot_ts")
+                row["snapshot_count"] = wb.get("snapshot_count", 0)
+                row["years_active"] = wb.get("years_active", 0.0)
+                row["has_japanese"] = bool(wb.get("has_japanese", False))
+                if wb.get("title"):
+                    row["title"] = wb.get("title", "")
+                quality["wayback_recovered"] += 1
+            except Exception as exc:
+                print(f"  wayback retry failed: {exc}")
+                new_errs.append(f"wayback: {exc}")
+                quality["wayback_still_failing"] += 1
+
+        # Recompute score with the (possibly) refreshed inputs.
+        category, _ = categorize(
+            domain=domain,
+            title=row.get("title", ""),
+            text_sample="",
+            anchors=[{"anchor": a} for a in (row.get("top_anchors") or [])],
+            org_keywords=row.get("org_keywords", 0),
+        )
+        row["category"] = category
+        score = compute_score(
+            dr=row.get("dr", 0.0),
+            refdomains=row.get("refdomains", 0),
+            refips=row.get("refips", 0),
+            refclass_c=row.get("refclass_c", 0),
+            years_active=row.get("years_active", 0.0),
+            has_japanese=bool(row.get("has_japanese", False)),
+            refdomains_gojp=row.get("refdomains_gojp", 0),
+            refdomains_lgjp=row.get("refdomains_lgjp", 0),
+            refdomains_acjp=row.get("refdomains_acjp", 0),
+            category=category,
+            has_spam=bool(row.get("has_spam", False)),
+        )
+        row["score"] = score["score"]
+        row["score_breakdown"] = score["score_breakdown"]
+        row["errors"] = new_errs
+        time.sleep(sleep_between)
+
+    rows.sort(key=lambda r: r.get("score", 0), reverse=True)
+    quality["written_rows"] = len(rows)
+    quality["zero_rows"] = sum(1 for r in rows if not _row_has_real_data(r))
+    return rows, quality
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(description="Analyze expired domains.")
@@ -860,7 +1034,31 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Re-analyse every domain even if already in docs/data.json.",
     )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help=(
+            "Skip CSV input entirely. Re-attempt only the previously-failed "
+            "sub-fetches (Wayback / refdomains / anchors) on rows already in "
+            "docs/data.json. Does not consume Ahrefs batch-analysis credits."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.retry_failed:
+        rows, quality = retry_failed_rows()
+        write_output(rows, quality=quality)
+        print(
+            "[quality] retry-failed: "
+            f"refdomains_recovered={quality['refdomains_recovered']}/"
+            f"{quality['rows_needing_refdomains']} "
+            f"anchors_recovered={quality['anchors_recovered']}/"
+            f"{quality['rows_needing_anchors']} "
+            f"wayback_recovered={quality['wayback_recovered']}/"
+            f"{quality['rows_needing_wayback']} "
+            f"zero_rows={quality.get('zero_rows', 0)}"
+        )
+        return 0
 
     if args.input is not None:
         print(f"[input] {args.input}")
