@@ -152,6 +152,47 @@ def categorize(
     return best, scores
 
 
+class QuotaInsufficientError(RuntimeError):
+    """Raised when the Ahrefs subscription does not have enough units to
+    safely run the requested work. Inherits ``RuntimeError`` so callers
+    that only catch the base class still see the abort, but ``main()``
+    can match on this specific type to format a friendly message and
+    return a distinct exit code instead of dumping a stacktrace.
+    """
+
+
+# Conservative units-per-domain estimate for the batch-analysis call.
+# Ahrefs documents 22 units/row for batch-analysis when selecting the
+# fields this tool requests; round up to leave headroom for the
+# select-list growing later.
+BATCH_UNITS_PER_DOMAIN = 22
+
+
+def _ahrefs_units_left(info: dict) -> tuple[int, str]:
+    """Return ``(units_left, reset_date)`` from ``subscription_info()``.
+
+    Workspace and per-key limits are tracked separately on Ahrefs Lite;
+    the effective ceiling is the smaller of the two remainders. Returns
+    ``(-1, "unknown")`` when the payload shape is unexpected so the
+    caller can decide to fall through rather than abort on a parse
+    glitch.
+    """
+    limits = (info or {}).get("limits_and_usage") or {}
+    if not isinstance(limits, dict):
+        return -1, "unknown"
+    try:
+        ws_left = int(limits.get("units_limit_workspace", 0)) - int(
+            limits.get("units_usage_workspace", 0)
+        )
+        key_left = int(limits.get("units_limit_api_key", 0)) - int(
+            limits.get("units_usage_api_key", 0)
+        )
+    except (TypeError, ValueError):
+        return -1, "unknown"
+    reset = str(limits.get("usage_reset_date") or "unknown")
+    return min(ws_left, key_left), reset
+
+
 SPAM_KEYWORDS = [
     "casino",
     "porn",
@@ -678,13 +719,35 @@ def analyze(
         client: AhrefsClient | None = None
     else:
         client = AhrefsClient()
+        units_left = -1
+        reset_date = "unknown"
         try:
             info = client.subscription_info()
             print(f"[ahrefs] subscription info: {info}")
+            units_left, reset_date = _ahrefs_units_left(info)
         except Exception as exc:
             print(f"[ahrefs] WARN could not fetch subscription info: {exc}")
             quality["errors"].append(f"subscription-info: {exc}")
         if domains_to_fetch:
+            # Pre-flight: refuse to start a CSV run when batch-analysis
+            # alone wouldn't fit in the remaining quota. Bailing out
+            # *before* the API call gives the user a clean message
+            # instead of a stacktrace, and saves one wasted unit lookup.
+            need = len(domains_to_fetch) * BATCH_UNITS_PER_DOMAIN
+            if 0 <= units_left < need:
+                quality["ahrefs_quota_exhausted"] = True
+                quality["errors"].append(
+                    f"quota_insufficient: need {need}, left {units_left}, "
+                    f"resets {reset_date}"
+                )
+                raise QuotaInsufficientError(
+                    f"Need ~{need} units for batch-analysis on "
+                    f"{len(domains_to_fetch)} domain(s), but only "
+                    f"{units_left} units left. Resets {reset_date}. "
+                    "Aborting without touching docs/data.json — upgrade "
+                    "the Ahrefs plan or wait for the next reset, then "
+                    "re-run."
+                )
             print(f"[ahrefs] batch-analysis for {len(domains_to_fetch)} domains...")
             try:
                 batch_rows = client.batch_analysis(domains_to_fetch)
@@ -1320,11 +1383,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[input] --limit {args.limit} applied")
     print(f"[input] total unique: {len(domains)} domain(s)")
 
-    rows, quality = analyze(
-        domains,
-        dry_run=args.dry_run,
-        skip_existing=not args.force,
-    )
+    try:
+        rows, quality = analyze(
+            domains,
+            dry_run=args.dry_run,
+            skip_existing=not args.force,
+        )
+    except QuotaInsufficientError as exc:
+        # No stacktrace — pre-flight already explained the situation.
+        # Exit code 2 distinguishes "ran out of quota" from other failure
+        # modes so a future workflow step can branch on it if needed.
+        print(f"[ahrefs] QUOTA INSUFFICIENT: {exc}")
+        return 2
     write_output(rows, quality=quality)
     print(
         f"[quality] cached={quality['cached']} fresh={quality['fresh']} "
