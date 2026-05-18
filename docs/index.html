@@ -1234,6 +1234,10 @@
             r.refips || 0,
             r.refclass_c || 0,
             { display: jpDomainsCell, value: jpDomainsValue },
+            r.active_go_jp_count || 0,
+            r.active_lg_jp_count || 0,
+            r.active_ac_jp_count || 0,
+            r.active_high_trust_score || 0,
             Math.floor(r.years_active || 0),
             r.has_japanese ? "あり" : "—",
             waybackCell,
@@ -1279,6 +1283,10 @@
               return data.value;
             },
           },
+          { title: '現役go.jp<span class="tip" data-tip="現在も生きている(is_lost=false).go.jpからの被リンク本数(Ahrefs all-backlinks, 1 per domain)。過去の幽霊リンクを除いた現役評価。">?</span>' },
+          { title: '現役lg.jp<span class="tip" data-tip="現在も生きている(is_lost=false).lg.jpからの被リンク本数(Ahrefs all-backlinks, 1 per domain)。">?</span>' },
+          { title: '現役ac.jp<span class="tip" data-tip="現在も生きている(is_lost=false).ac.jpからの被リンク本数(Ahrefs all-backlinks, 1 per domain)。">?</span>' },
+          { title: '高信頼スコア<span class="tip" data-tip="現役の権威ドメインから受けている被リンクの重み付き合計: go×10 + lg×6 + ac×5。幽霊リンクを排除した「今この瞬間の信頼度」。デフォルトソートキー。">?</span>' },
           { title: '運用年数<span class="tip" data-tip="Waybackの最古スナップから最新スナップまでの年数。過去に長く運用されていた証拠。">?</span>' },
           { title: '日本語履歴<span class="tip" data-tip="Waybackの履歴から日本語運用の痕跡を検出。.jp系URLの履歴 OR ページのlang=ja / 日本語文字率5%以上を検出すると「あり」。">?</span>' },
           {
@@ -1290,7 +1298,10 @@
             orderable: false,
           },
         ],
-        order: [[3, "desc"]],
+        // Column 12 = 高信頼スコア (active_high_trust_score). Spec change:
+        // default sort moved here from the composite score column so the
+        // screening list surfaces active gov/edu links first.
+        order: [[12, "desc"]],
         pageLength: 50,
         lengthMenu: [25, 50, 100, 200, 500],
         scrollX: true,

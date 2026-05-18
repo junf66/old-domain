@@ -454,6 +454,84 @@ def _batch_row_for(domain: str, batch: list[dict]) -> dict:
     return candidates[0]
 
 
+ACTIVE_TRUST_WHERE = (
+    '{"and":['
+    '{"field":"is_lost","is":["eq",false]},'
+    '{"or":['
+    '{"field":"url_from","is":["substring","ac.jp"]},'
+    '{"field":"url_from","is":["substring","lg.jp"]},'
+    '{"field":"url_from","is":["substring","go.jp"]}'
+    ']}'
+    ']}'
+)
+
+ACTIVE_TRUST_SELECT = "url_from,anchor,first_seen,is_dofollow"
+
+# .ac.jp / .lg.jp / .go.jp screening weights — see compute_active_trust_score.
+ACTIVE_TRUST_WEIGHTS = {"go": 10, "lg": 6, "ac": 5}
+
+
+def _classify_active_trust_link(url_from: str) -> str | None:
+    """Return ``'go'`` / ``'lg'`` / ``'ac'`` for a referring page URL, else None.
+
+    Ahrefs' ``substring`` where filter matches anywhere in the URL, so
+    we re-check the host part here to avoid counting noise like
+    ``example.com/?ref=ac.jp``.
+    """
+    if not url_from:
+        return None
+    s = str(url_from).strip().lower()
+    for proto in ("https://", "http://"):
+        if s.startswith(proto):
+            s = s[len(proto):]
+            break
+    host = s.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0].rstrip(".")
+    if not host:
+        return None
+    if host.endswith(".go.jp") or host == "go.jp":
+        return "go"
+    if host.endswith(".lg.jp") or host == "lg.jp":
+        return "lg"
+    if host.endswith(".ac.jp") or host == "ac.jp":
+        return "ac"
+    return None
+
+
+def count_active_trust_links(
+    backlinks: list[dict],
+) -> tuple[int, int, int]:
+    """Return ``(go_count, lg_count, ac_count)`` from active-trust backlinks.
+
+    Counts unique referring root domains per TLD (the all-backlinks
+    request runs with ``aggregation=1_per_domain``, so each row already
+    represents one referring domain — we just bucket them).
+    """
+    seen: dict[str, set[str]] = {"go": set(), "lg": set(), "ac": set()}
+    for row in backlinks or []:
+        url = row.get("url_from") if isinstance(row, dict) else None
+        cls = _classify_active_trust_link(url or "")
+        if not cls:
+            continue
+        host = str(url).split("//", 1)[-1].split("/", 1)[0].lower()
+        # Reduce to the root e.g. ``shu-lab.shudo-u.ac.jp`` -> ``shudo-u.ac.jp``
+        parts = host.split(".")
+        if len(parts) >= 3:
+            root = ".".join(parts[-3:])
+        else:
+            root = host
+        seen[cls].add(root)
+    return len(seen["go"]), len(seen["lg"]), len(seen["ac"])
+
+
+def compute_active_trust_score(go: int, lg: int, ac: int) -> int:
+    """Weighted screening score: go×10 + lg×6 + ac×5."""
+    return (
+        max(go, 0) * ACTIVE_TRUST_WEIGHTS["go"]
+        + max(lg, 0) * ACTIVE_TRUST_WEIGHTS["lg"]
+        + max(ac, 0) * ACTIVE_TRUST_WEIGHTS["ac"]
+    )
+
+
 def _count_tld(refdoms: list[dict], suffix: str) -> int:
     """Count referring domains whose host ends with `suffix` (case-insensitive).
 
@@ -589,6 +667,9 @@ def analyze(
         "wayback_errors": 0,
         "wayback_disabled": False,
         "batch_chunks_failed": 0,
+        "all_backlinks_errors": 0,
+        "filtered_no_active_trust": 0,
+        "active_trust_filter_failures": 0,
         "errors": [],
     }
 
@@ -660,6 +741,11 @@ def analyze(
                 "title": "Example blog about investment",
                 "text_sample": "投資 株式 fx",
             }
+            active_go = 1
+            active_lg = 0
+            active_ac = 2
+            active_score = compute_active_trust_score(active_go, active_lg, active_ac)
+            active_filter_failed = False
         else:
             row = _batch_row_for(domain, batch_rows)
             if not row:
@@ -673,6 +759,59 @@ def analyze(
             refips = int(_f(row, "refips"))
             refclass_c = int(_f(row, "refips_subnets", "refclass_c"))
             ahrefs_dead = getattr(client, "quota_exhausted", False)
+
+            # ----- Step 1: active .go/.lg/.ac.jp screening filter ---------
+            # Drop the domain entirely when it has zero ACTIVE high-trust
+            # links. We do this BEFORE refdomains / anchors so a 0-hit
+            # domain only costs one all-backlinks call (≈50 units) instead
+            # of ~250 units of extra site-explorer work.
+            active_go = active_lg = active_ac = 0
+            active_score = 0
+            active_filter_failed = False
+            active_backlinks: list[dict] = []
+            if ahrefs_dead:
+                active_filter_failed = True
+                row_errors.append(
+                    "all_backlinks: skipped (ahrefs quota exhausted)"
+                )
+                quality["active_trust_filter_failures"] += 1
+            else:
+                try:
+                    active_backlinks = client.site_explorer_all_backlinks(
+                        domain,
+                        select=ACTIVE_TRUST_SELECT,
+                        where=ACTIVE_TRUST_WHERE,
+                    )
+                    active_go, active_lg, active_ac = count_active_trust_links(
+                        active_backlinks
+                    )
+                    active_score = compute_active_trust_score(
+                        active_go, active_lg, active_ac
+                    )
+                except Exception as exc:
+                    print(f"  all-backlinks filter failed: {exc}")
+                    active_filter_failed = True
+                    quality["all_backlinks_errors"] += 1
+                    quality["active_trust_filter_failures"] += 1
+                    row_errors.append(f"all_backlinks: {exc}")
+                    if getattr(client, "quota_exhausted", False):
+                        ahrefs_dead = True
+            if (
+                not active_filter_failed
+                and active_go == 0
+                and active_lg == 0
+                and active_ac == 0
+            ):
+                # Spec: 0-hit domains are excluded from the candidate list
+                # entirely, AND we early-return to skip the expensive
+                # refdomains / anchors / wayback calls.
+                quality["filtered_no_active_trust"] += 1
+                print(
+                    f"  [filter] no active .go/.lg/.ac.jp backlink — "
+                    f"excluding from output"
+                )
+                continue
+
             if ahrefs_dead:
                 refdoms = []
                 row_errors.append("refdomains: skipped (ahrefs quota exhausted)")
@@ -777,6 +916,10 @@ def analyze(
                 "refdomains_gojp": refdomains_gojp,
                 "refdomains_lgjp": refdomains_lgjp,
                 "refdomains_acjp": refdomains_acjp,
+                "active_go_jp_count": active_go,
+                "active_lg_jp_count": active_lg,
+                "active_ac_jp_count": active_ac,
+                "active_high_trust_score": active_score,
                 "first_snapshot": wayback.get("first_snapshot"),
                 "last_snapshot": wayback.get("last_snapshot"),
                 "last_snapshot_ts": wayback.get("last_snapshot_ts"),
@@ -809,7 +952,14 @@ def analyze(
                 "Refusing to write mostly-zero data to docs/data.json."
             )
 
-    rows.sort(key=lambda r: r["score"], reverse=True)
+    # Default sort: high-trust screening score first, then composite score.
+    rows.sort(
+        key=lambda r: (
+            r.get("active_high_trust_score", 0),
+            r.get("score", 0),
+        ),
+        reverse=True,
+    )
     quality["written_rows"] = len(rows)
     quality["zero_rows"] = sum(1 for r in rows if not _row_has_real_data(r))
     return rows, quality
@@ -1064,7 +1214,13 @@ def retry_failed_rows(
         row["errors"] = new_errs
         time.sleep(sleep_between)
 
-    rows.sort(key=lambda r: r.get("score", 0), reverse=True)
+    rows.sort(
+        key=lambda r: (
+            r.get("active_high_trust_score", 0),
+            r.get("score", 0),
+        ),
+        reverse=True,
+    )
     quality["written_rows"] = len(rows)
     quality["zero_rows"] = sum(1 for r in rows if not _row_has_real_data(r))
     return rows, quality

@@ -238,6 +238,49 @@ class AhrefsClient:
         data = self._get("site-explorer/anchors", params=params)
         return data.get("anchors") or data.get("results") or []
 
+    def site_explorer_all_backlinks(
+        self,
+        target: str,
+        *,
+        select: str,
+        where: str,
+        mode: str = "subdomains",
+        aggregation: str = "1_per_domain",
+        history: str = "live",
+        limit: int = 200,
+    ) -> list[dict]:
+        """Fetch backlinks matching a ``where`` filter.
+
+        Defaults are tuned for the "active trust links" screening step:
+
+        - ``aggregation='1_per_domain'`` returns one row per referring
+          domain so counts reflect unique domains rather than every
+          backlink page (cheaper and matches the spec).
+        - ``history='live'`` excludes ``is_lost=true`` links by default
+          at the API level; callers can still add ``is_lost`` filters
+          inside ``where`` for belt-and-braces safety.
+        - ``mode='subdomains'`` matches Ahrefs' own recommendation for
+          domain-level queries.
+
+        ``where`` must be the JSON-encoded filter expression (Ahrefs
+        accepts it as a query-string parameter).
+        """
+        params = {
+            "target": target,
+            "mode": mode,
+            "aggregation": aggregation,
+            "history": history,
+            "limit": limit,
+            "select": select,
+            "where": where,
+        }
+        data = self._get("site-explorer/all-backlinks", params=params)
+        for k in ("backlinks", "results", "data", "rows", "items"):
+            v = data.get(k) if isinstance(data, dict) else None
+            if isinstance(v, list):
+                return v
+        return []
+
 
 def _demo() -> None:
     """Quick smoke test against example.com.
